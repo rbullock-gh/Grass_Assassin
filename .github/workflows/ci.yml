@@ -75,6 +75,17 @@ jobs:
         # point unbundleable — Metro could not resolve the workspace packages'
         # ESM ".js" specifiers — while every other check was green, so this step
         # exists specifically to catch that class of break.
+        env:
+          # Overrides the job-wide NODE_ENV=test, which the tests need and this
+          # must not have: under "test", babel-preset-expo stops inlining
+          # EXPO_ROUTER_APP_ROOT and every route fails to resolve. An export is
+          # a production build in any case.
+          #
+          # Worth recording how this hid: with a warm Metro cache the already
+          # transformed module is reused and the bundle succeeds, so it only
+          # appears on a cold cache — which is every CI run and almost no local
+          # one. Reproduced locally by clearing .expo before exporting.
+          NODE_ENV: production
         run: pnpm --filter @grassassassin/mobile exec expo export --platform web --output-dir .expo-web-ci
 
       - name: Create shadow database
