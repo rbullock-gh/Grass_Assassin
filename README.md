@@ -147,4 +147,26 @@ pnpm --filter @grassassassin/admin dev     # http://localhost:3001
 pnpm --filter @grassassassin/mobile start  # Expo — needs a device or simulator
 ```
 
+### Rendering every screen and checking what broke
+
+Three of the worst defects this project has had were invisible to typecheck and
+to the entire unit suite — the app could not bundle at all, every line of text
+overlapped the one above it, and a worker's balance was rounded UP to more money
+than they had. None are findable by reading; all three are obvious in a
+screenshot.
+
+```bash
+pnpm --filter @grassassassin/mobile exec expo export --platform web --output-dir .web
+node scripts/serve-web.mjs .web &
+node scripts/render-check.mjs        # 84 combinations, ~3.5 minutes
+```
+
+Every screen at four widths (phone, Fold, tablet, desktop) in both themes,
+signed in against the running API. Fails on a console error, a page error,
+horizontal overflow, an unmatched route, or a screen that renders almost
+nothing. Screenshots land in `.render-check/`.
+
+This drives the Expo **web** build, which is not a phone: gestures, native maps,
+the camera and SecureStore all behave differently and remain unproven here.
+
 Copy `.env.example` to `.env` for the full variable list.

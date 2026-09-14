@@ -4,6 +4,8 @@ build/
 .next/
 .expo/
 .expo-web-ci/
+.render-check/
+.web/
 coverage/
 *.tsbuildinfo
 .env
