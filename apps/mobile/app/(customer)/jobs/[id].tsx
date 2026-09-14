@@ -380,8 +380,12 @@ const styles = StyleSheet.create({
   stars: { flexDirection: 'row', gap: space[1] },
   star: { minWidth: minTouchTarget, minHeight: minTouchTarget, alignItems: 'center', justifyContent: 'center' },
   tipRow: { flexDirection: 'row', gap: space[2], flexWrap: 'wrap' },
+  // An even 2x2 rather than flexGrow, which packed three onto one row and left
+  // the fourth stretched across its own. These buttons move money, so a
+  // predictable grid with large targets beats a compact but uneven row.
   tipButton: {
-    flexGrow: 1, minWidth: 74, minHeight: minTouchTarget, borderWidth: 1, borderRadius: radius.md,
+    flexBasis: '47%', flexGrow: 1, minHeight: minTouchTarget + 8,
+    borderWidth: 1, borderRadius: radius.md,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[2],
   },
   primary: { minHeight: minTouchTarget + 8, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },

@@ -143,7 +143,12 @@ export default function MessagesScreen() {
             value={draft}
             onChangeText={setDraft}
             placeholder={`Message ${thread.counterpart.firstName}`}
-            placeholderTextColor={c.textTertiary}
+            // textSecondary, not the usual tertiary: this composer has no
+            // visible label, so the placeholder IS the label — it is the only
+            // thing naming who the message goes to. Tertiary on the sunken
+            // surface is 3.43:1 in light, which is not enough for text carrying
+            // that job outdoors.
+            placeholderTextColor={c.textSecondary}
             multiline
             maxLength={MAX_MESSAGE_LENGTH}
             accessibilityLabel="Message"
