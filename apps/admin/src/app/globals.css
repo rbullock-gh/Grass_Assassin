@@ -250,3 +250,118 @@ td.strong { font-weight: 600; }
   font-size: 12.5px; color: var(--ink-2);
 }
 :focus-visible { outline: 2px solid var(--brand-bright); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------------------------------------------------------------------------
+   Fee editing
+   ---------------------------------------------------------------------------
+   The dangerous input on this page is a correctly-formatted wrong number, so
+   every field carries its unit in the label and its human meaning underneath.
+   The range line is not decoration: it is the difference between "12" meaning
+   twelve percent and twelve basis points.
+*/
+
+.config-form { display: grid; gap: 20px; }
+
+.config-scope { display: grid; gap: 6px; max-width: 460px; }
+
+.config-scope label,
+.config-field label {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: .01em;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.config-field label .unit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.config-scope select,
+.config-field input {
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  width: 100%;
+  min-height: 40px;
+}
+
+.config-scope select:focus-visible,
+.config-field input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.config-field input.invalid { border-color: var(--danger); }
+
+.config-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px 20px;
+}
+
+.config-field { display: grid; gap: 5px; align-content: start; }
+
+.field-help, .field-error, .field-range {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.field-help { color: var(--ink-2); }
+.field-error { color: var(--danger); font-weight: 600; }
+.field-range { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.field-range b { color: var(--ink-2); font-weight: 650; }
+
+.config-errors {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--danger-wash);
+  display: grid;
+  gap: 8px;
+}
+
+.config-errors p { margin: 0; font-size: 13.5px; color: var(--danger); font-weight: 550; }
+
+.config-saved {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.config-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.config-actions button {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: var(--brand);
+  border: 0;
+  border-radius: 7px;
+  padding: 10px 20px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.config-actions button:hover:not(:disabled) { background: var(--brand-bright); }
+.config-actions button:disabled { opacity: .6; cursor: default; }
+.config-actions button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }

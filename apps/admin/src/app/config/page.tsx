@@ -1,8 +1,32 @@
+import {
+  CONFIG_FIELDS, DEFAULT_FEE_CONFIG, DEFAULT_CANCELLATION_POLICY,
+} from '@grassassassin/shared'
 import { loadFeeConfig } from '@/lib/metrics'
+import { FeeForm } from './fee-form'
 import { db } from '@/lib/db'
 import { money, relativeTime } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * What each setting falls back to when no row exists.
+ *
+ * Mirrors the API's own resolution order, so the form shows the rate that is
+ * actually in force rather than an empty box. A blank input on a fee page is
+ * genuinely dangerous — it looks like "no fee" and saves as an error.
+ */
+const COMPILED_DEFAULTS: Record<string, number> = {
+  'fees.worker_commission_bps': DEFAULT_FEE_CONFIG.workerCommissionBps,
+  'fees.customer_service_fee_bps': DEFAULT_FEE_CONFIG.customerServiceFeeBps,
+  'fees.customer_service_fee_min_cents': DEFAULT_FEE_CONFIG.customerServiceFeeMinCents,
+  'fees.min_job_price_cents': DEFAULT_FEE_CONFIG.minJobPriceCents,
+  'fees.max_job_price_cents': DEFAULT_FEE_CONFIG.maxJobPriceCents,
+  'cancellation.grace_minutes': DEFAULT_CANCELLATION_POLICY.graceMinutesAfterClaim,
+  'cancellation.late_hours': DEFAULT_CANCELLATION_POLICY.lateCancelHours,
+  'cancellation.early_penalty_bps': DEFAULT_CANCELLATION_POLICY.earlyCancelPenaltyBps,
+  'cancellation.late_penalty_bps': DEFAULT_CANCELLATION_POLICY.lateCancelPenaltyBps,
+  'approval.auto_approve_hours': 24,
+}
 
 const DESCRIPTIONS: Record<string, string> = {
   'fees.worker_commission_bps': 'Commission deducted from the job price, in basis points',
@@ -35,6 +59,24 @@ export default async function ConfigPage() {
     db.rank.findMany({ orderBy: { minPoints: 'asc' }, select: { key: true, name: true, minPoints: true, commissionDiscountBps: true, minRating: true, minCompletionRate: true } }),
   ])
 
+  // Only the global rows seed the form. A market override is an explicit,
+  // separate act — prefilling the form with one would make it far too easy to
+  // save Nashville's rate as the global default by accident.
+  const currentGlobal: Record<string, number> = {}
+  for (const row of config) {
+    if (row.scopeKey !== null) continue
+    const numeric = Number(row.value)
+    if (Number.isFinite(numeric)) currentGlobal[row.key] = numeric
+  }
+  for (const field of CONFIG_FIELDS) {
+    // An unset key is showing a compiled-in default, so seed the input with it
+    // rather than leaving a blank box that saves as "enter a value".
+    if (currentGlobal[field.key] === undefined) {
+      const fallback = COMPILED_DEFAULTS[field.key]
+      if (fallback !== undefined) currentGlobal[field.key] = fallback
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -45,6 +87,19 @@ export default async function ConfigPage() {
           cannot respond to a competitor or run the experiments that find the right number.
         </p>
       </div>
+
+      <section className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-head">
+          <h2>Change a rate</h2>
+          <span>Live on the next job posted</span>
+        </div>
+        <div className="panel-body">
+          <FeeForm
+            current={currentGlobal}
+            scopes={areas.map((area) => ({ slug: area.slug, name: area.name }))}
+          />
+        </div>
+      </section>
 
       <div className="grid-2">
         <section className="panel">
