@@ -307,6 +307,15 @@ export default function CustomerJobScreen() {
       ) : null}
 
       <View style={{ gap: space[3], marginTop: space[2] }}>
+        {job.worker ? (
+          // Placed above the irreversible actions: a customer about to cancel
+          // or report a problem should see "ask them" before "escalate".
+          <Secondary
+            label={`Message ${job.worker.firstName}`}
+            onPress={() => router.push(`/(shared)/messages/${job.id}`)}
+            busy={false}
+          />
+        ) : null}
         {actions.canApprove ? (
           <Primary label="APPROVE AND PAY" onPress={approve} busy={busy} />
         ) : null}

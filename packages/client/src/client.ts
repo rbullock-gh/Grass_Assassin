@@ -325,6 +325,27 @@ export class GrassAssassinClient {
     return this.request<RecurringJobSummary>('PATCH', `/v1/recurring/${id}`, { body: input })
   }
 
+  // --- messages -----------------------------------------------------------
+
+  conversations() {
+    return this.request<{ conversations: ConversationSummary[] }>('GET', '/v1/conversations')
+  }
+
+  /**
+   * A job's thread. Addressed by job because that is what every caller has.
+   *
+   * Reading marks the other party's messages as read, so this is not safe to
+   * call speculatively in the background.
+   */
+  jobMessages(jobId: string) {
+    return this.request<MessageThread>('GET', `/v1/jobs/${jobId}/messages`)
+  }
+
+  sendMessage(jobId: string, body: string) {
+    return this.request<{ message: ChatMessage; notice: string | null }>(
+      'POST', `/v1/jobs/${jobId}/messages`, { body: { body } })
+  }
+
   // --- worker -------------------------------------------------------------
 
   workerProfile(id: string) { return this.request<WorkerPublicProfile>('GET', `/v1/workers/${id}`) }
@@ -505,6 +526,40 @@ export interface WorkerPublicProfile {
     rating: number; comment: string | null; tags: string[]; createdAt: string
     author: { firstName: string; avatarUrl: string | null }
   }>
+}
+
+export interface ChatMessage {
+  id: string
+  senderId: string | null
+  kind: 'TEXT' | 'PHOTO' | 'SYSTEM'
+  body: string | null
+  attachmentUrl?: string | null
+  readAt: string | null
+  createdAt: string
+}
+
+export interface ConversationSummary {
+  id: string
+  jobId: string
+  job: {
+    id: string; title: string; status: string; dueAt: string
+    category: { name: string; icon: string | null } | null
+  }
+  counterpartId: string
+  lastMessage: Pick<ChatMessage, 'body' | 'kind' | 'senderId' | 'createdAt'> | null
+  lastMessageAt: string | null
+  unreadCount: number
+  open: boolean
+}
+
+export interface MessageThread {
+  conversationId: string
+  jobId: string
+  open: boolean
+  /** Why it is read-only. Null while open. */
+  closedReason: string | null
+  counterpart: { id: string; firstName: string; avatarUrl: string | null }
+  messages: ChatMessage[]
 }
 
 export interface Earnings {

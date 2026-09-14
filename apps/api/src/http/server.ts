@@ -17,6 +17,8 @@ import { registerWorkerRoutes } from './routes/workers.js'
 import { registerWebhookRoutes } from './routes/webhooks.js'
 import { registerPhotoRoutes } from './routes/photos.js'
 import { registerRecurringRoutes } from './routes/recurring.js'
+import { registerMessageRoutes } from './routes/messages.js'
+import type { PushSender } from '../modules/notifications/notifier.js'
 import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
 
 export interface RateLimitSettings {
@@ -38,6 +40,8 @@ export interface ServerDeps {
   provider: PaymentProvider
   /** Object storage for photos. Defaults to the in-memory fake. */
   storage?: StorageProvider
+  /** Push delivery. Defaults to the recording sender in local development. */
+  push?: PushSender
   config: {
     accessSecret: string
     accessTtlSeconds: number
@@ -228,6 +232,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerWebhookRoutes(instance, deps)
     await registerPhotoRoutes(instance, resolved)
     await registerRecurringRoutes(instance, resolved)
+    await registerMessageRoutes(instance, deps)
   }, { prefix: '/v1' })
 
   return app

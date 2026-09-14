@@ -165,6 +165,18 @@ export default function JobDetailScreen() {
             <Pressable onPress={openDirections} style={[styles.secondary, { borderColor: c.brand }]}>
               <Text style={{ color: c.brand, fontWeight: '700' }}>Get directions</Text>
             </Pressable>
+            {/* Sits directly under the address, which is where the questions
+                come from: a locked gate, a dog in the yard, a bin in the way.
+                Without it the only way to ask is a phone number. */}
+            <Pressable
+              onPress={() => router.push(`/(shared)/messages/${job.id}`)}
+              accessibilityRole="button"
+              style={[styles.secondary, { borderColor: c.border }]}
+            >
+              <Text style={{ color: c.textPrimary, fontWeight: '700' }}>
+                Message {job.customer.firstName}
+              </Text>
+            </Pressable>
           </>
         )}
       </View>

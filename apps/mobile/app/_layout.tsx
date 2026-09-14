@@ -39,6 +39,9 @@ export default function RootLayout() {
             <Stack.Screen name="(customer)/post" options={{ title: 'Post a job' }} />
             <Stack.Screen name="(customer)/jobs/[id]" options={{ title: 'Your job' }} />
             <Stack.Screen name="(customer)/properties/new" options={{ title: 'Add a property' }} />
+
+            {/* One thread per job, reachable from either side. */}
+            <Stack.Screen name="(shared)/messages/[jobId]" options={{ title: 'Messages' }} />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>
