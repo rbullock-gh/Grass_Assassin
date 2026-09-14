@@ -295,6 +295,36 @@ export class GrassAssassinClient {
     })
   }
 
+  /**
+   * Turns a finished job into a standing appointment.
+   *
+   * Offered right after a good rating, which is the moment the customer has
+   * just confirmed they are happy — see the recurring route for why that
+   * placement matters more than the feature itself.
+   */
+  makeRecurring(jobId: string, input: {
+    interval: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'
+    priceCents?: number
+    preferPreviousWorker?: boolean
+  }) {
+    return this.request<RecurringJobSummary>('POST', `/v1/jobs/${jobId}/make-recurring`, { body: input })
+  }
+
+  recurringJobs() {
+    return this.request<{ subscriptions: RecurringSubscription[] }>('GET', '/v1/recurring')
+  }
+
+  updateRecurringJob(id: string, input: {
+    active?: boolean
+    interval?: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'
+    priceCents?: number
+    /** Null clears an existing pause. */
+    pauseUntil?: string | null
+    nextRunAt?: string
+  }) {
+    return this.request<RecurringJobSummary>('PATCH', `/v1/recurring/${id}`, { body: input })
+  }
+
   // --- worker -------------------------------------------------------------
 
   workerProfile(id: string) { return this.request<WorkerPublicProfile>('GET', `/v1/workers/${id}`) }
@@ -390,6 +420,29 @@ export interface JobSummary {
   category?: { name: string; icon: string | null }
 }
 
+export interface AssignedWorker {
+  id: string; firstName: string; avatarUrl: string | null
+  rating: number | null; completedJobs: number; onTimeRate: number | null
+  rank: { key: string; name: string; verifiedBadge: boolean; colorHex: string | null } | null
+}
+
+export interface RecurringJobSummary {
+  id: string; interval: string; priceCents: number
+  nextRunAt: string
+  active?: boolean
+  pausedUntil?: string | null
+  preferredWorkerId?: string | null
+}
+
+export interface RecurringSubscription extends RecurringJobSummary {
+  active: boolean
+  lastRunAt: string | null
+  pausedUntil: string | null
+  category: { id: string; name: string; icon: string | null }
+  property: { id: string; label: string; city: string; state: string }
+  _count: { jobs: number }
+}
+
 export interface JobDetail extends JobSummary {
   description: string | null; specialInstructions: string | null
   yardSize: string | null
@@ -403,6 +456,18 @@ export interface JobDetail extends JobSummary {
   } | null
   photos: Array<{ id: string; kind: string; url: string; createdAt: string }>
   customer: { id: string; firstName: string; avatarUrl: string | null; rating: number | null; completedJobs: number }
+  /** Null until someone has claimed. Reputation only — never contact details. */
+  worker: AssignedWorker | null
+  claimedAt: string | null
+  completedAt: string | null
+  /**
+   * When unreviewed work will approve itself. Null unless awaiting approval.
+   * Sent by the server because the window is admin-configurable.
+   */
+  autoApproveAt: string | null
+  windowStartAt: string | null
+  windowEndAt: string | null
+  postedAt: string | null
   viewerRole: 'CUSTOMER' | 'WORKER' | 'VIEWER'
 }
 

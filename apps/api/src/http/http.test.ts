@@ -343,6 +343,104 @@ describe('THE PRIVACY BOUNDARY over HTTP', () => {
     expect(detail.json().location.lat).toBeCloseTo(NASHVILLE.lat, 5)
   })
 
+  it('tells the customer who claimed their job, without contact details', async () => {
+    const customer = await registerUser('who-cust@example.com')
+    const property = await createPropertyVia(customer.tokens.accessToken)
+    const category = await createCategory()
+    const jobId = (await postJobVia(customer.tokens.accessToken, property.id, category.id)).json().id
+
+    const before = await app.inject({
+      method: 'GET', url: `/v1/jobs/${jobId}`, headers: auth(customer.tokens.accessToken),
+    })
+    // Nobody has claimed, so there is nobody to name.
+    expect(before.json().worker).toBeNull()
+
+    const worker = await registerUser('who-worker@example.com', 'WORKER')
+    await prisma.workerProfile.update({
+      where: { userId: worker.user.id },
+      data: {
+        status: 'APPROVED', completedJobs: 30, averageRating: 4.9,
+        completionRate: 1, onTimeRate: 1, stripeAccountId: 'acct_1', payoutsEnabled: true,
+      },
+    })
+    await prisma.customerProfile.update({
+      where: { userId: customer.user.id },
+      data: { stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_test_visa' },
+    })
+    await app.inject({
+      method: 'POST', url: `/v1/jobs/${jobId}/claim`, headers: auth(worker.tokens.accessToken), payload: {},
+    })
+
+    const after = await app.inject({
+      method: 'GET', url: `/v1/jobs/${jobId}`, headers: auth(customer.tokens.accessToken),
+    })
+    const claimedBy = after.json().worker
+    // A stranger is about to walk onto their property. They are entitled to
+    // know who, and to see the reputation that earned them the job.
+    expect(claimedBy).not.toBeNull()
+    expect(claimedBy.firstName).toBe('Test')
+    expect(claimedBy.completedJobs).toBe(30)
+
+    // The stored average is 4.9 but no review backs it, so nothing is shown.
+    // A star rating with no reviews behind it is a fabricated endorsement of a
+    // real person, on the screen where a customer decides whether to trust them.
+    expect(claimedBy.rating).toBeNull()
+
+    await prisma.workerProfile.update({
+      where: { userId: worker.user.id },
+      data: { ratingCount: 12 },
+    })
+    const withReviews = await app.inject({
+      method: 'GET', url: `/v1/jobs/${jobId}`, headers: auth(customer.tokens.accessToken),
+    })
+    expect(withReviews.json().worker.rating).toBeCloseTo(4.9, 5)
+
+    // Reputation only. The same rule the public profile follows.
+    expect(Object.keys(claimedBy).sort()).toEqual(
+      ['avatarUrl', 'completedJobs', 'firstName', 'id', 'onTimeRate', 'rank', 'rating'])
+    expect(JSON.stringify(claimedBy)).not.toContain('@example.com')
+  })
+
+  it('never tells an uninvolved worker who claimed a job', async () => {
+    // The mirror image of the address rule. Learning that a named person is at
+    // a house in this neighbourhood tonight is a location-inference channel on
+    // a real worker, and it deserves the same boundary.
+    const customer = await registerUser('leak-cust@example.com')
+    const property = await createPropertyVia(customer.tokens.accessToken)
+    const category = await createCategory()
+    const jobId = (await postJobVia(customer.tokens.accessToken, property.id, category.id)).json().id
+
+    const winner = await registerUser('leak-winner@example.com', 'WORKER')
+    await prisma.workerProfile.update({
+      where: { userId: winner.user.id },
+      data: {
+        status: 'APPROVED', completedJobs: 30, averageRating: 4.9,
+        completionRate: 1, onTimeRate: 1, stripeAccountId: 'acct_1', payoutsEnabled: true,
+      },
+    })
+    await prisma.customerProfile.update({
+      where: { userId: customer.user.id },
+      data: { stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_test_visa' },
+    })
+    const claim = await app.inject({
+      method: 'POST', url: `/v1/jobs/${jobId}/claim`, headers: auth(winner.tokens.accessToken), payload: {},
+    })
+    expect(claim.json().outcome).toBe('WON')
+
+    const bystander = await registerUser('leak-bystander@example.com', 'WORKER')
+    await prisma.workerProfile.update({
+      where: { userId: bystander.user.id },
+      data: { status: 'APPROVED', completedJobs: 30, averageRating: 4.9, completionRate: 1, onTimeRate: 1 },
+    })
+
+    const detail = await app.inject({
+      method: 'GET', url: `/v1/jobs/${jobId}`, headers: auth(bystander.tokens.accessToken),
+    })
+    expect(detail.json().worker).toBeNull()
+    expect(detail.json().address).toBeNull()
+    expect(detail.json().locationPrecision).toBe('APPROXIMATE')
+  })
+
   it('does not expose the customer\'s fee breakdown to the worker', async () => {
     const customer = await registerUser('fee-cust@example.com')
     const property = await createPropertyVia(customer.tokens.accessToken)

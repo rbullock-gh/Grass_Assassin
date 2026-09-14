@@ -24,8 +24,21 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="index" options={{ headerShown: false }} />
+
+            {/* Signed out. No header: a back arrow to nowhere is worse than none. */}
+            <Stack.Screen name="(auth)/welcome" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)/sign-in" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)/sign-up" options={{ headerShown: false }} />
+
             <Stack.Screen name="(worker)/map" options={{ headerShown: false }} />
             <Stack.Screen name="(worker)/job/[id]" options={{ title: 'Job details' }} />
+            <Stack.Screen name="(worker)/earnings" options={{ title: 'Earnings' }} />
+            <Stack.Screen name="(worker)/profile/[id]" options={{ title: 'Pro' }} />
+
+            <Stack.Screen name="(customer)/home" options={{ headerShown: false }} />
+            <Stack.Screen name="(customer)/post" options={{ title: 'Post a job' }} />
+            <Stack.Screen name="(customer)/jobs/[id]" options={{ title: 'Your job' }} />
+            <Stack.Screen name="(customer)/properties/new" options={{ title: 'Add a property' }} />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>

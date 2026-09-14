@@ -3,6 +3,7 @@ import {
   POST_STEPS, EMPTY_DRAFT, validateStep, nextStep, previousStep, reachableSteps,
   canPublish, resumeAt, availablePresets, DEADLINE_PRESETS, priceFeedback,
   suggestedStartingPrice, costBreakdown, estimatedMinutesFor, LATEST_HOUR_TO_OFFER_TODAY,
+  upcomingDays, formatDayLabel,
   type PostDraft,
 } from '@/lib/post-flow'
 import type { Category, PriceGuidance } from '@grassassassin/client'
@@ -280,5 +281,56 @@ describe('duration estimate', () => {
   it('never returns an absurdly short estimate', () => {
     expect(estimatedMinutesFor({ ...category, baseMinutes: 5 }, 'UNDER_QUARTER_ACRE'))
       .toBeGreaterThanOrEqual(15)
+  })
+})
+
+describe('custom date selection', () => {
+  const now = new Date('2026-09-14T09:00:00')
+
+  it('never offers a deadline that has already passed', () => {
+    // The whole point of the custom list: an expired deadline is not a choice,
+    // it is a dead end that produces a job nobody can claim.
+    const evening = new Date('2026-09-14T22:00:00')
+    for (const day of upcomingDays(evening)) {
+      expect(day.getTime()).toBeGreaterThan(evening.getTime())
+    }
+  })
+
+  it('includes today while there is still daylight to work in', () => {
+    const days = upcomingDays(now)
+    expect(formatDayLabel(days[0]!, now)).toBe('Today')
+  })
+
+  it('drops today once 7pm has passed', () => {
+    const late = new Date('2026-09-14T20:30:00')
+    expect(formatDayLabel(upcomingDays(late)[0]!, late)).toBe('Tomorrow')
+  })
+
+  it('labels the first two days in words and the rest by date', () => {
+    const days = upcomingDays(now)
+    expect(formatDayLabel(days[0]!, now)).toBe('Today')
+    expect(formatDayLabel(days[1]!, now)).toBe('Tomorrow')
+    expect(formatDayLabel(days[2]!, now)).toMatch(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d+$/)
+  })
+
+  it('returns days in order, each exactly one day apart', () => {
+    const days = upcomingDays(now)
+    for (let i = 1; i < days.length; i += 1) {
+      const gap = days[i]!.getTime() - days[i - 1]!.getTime()
+      expect(gap).toBe(86_400_000)
+    }
+  })
+
+  it('stops at two weeks — further out than that is a recurring service', () => {
+    expect(upcomingDays(now).length).toBeLessThanOrEqual(14)
+  })
+
+  it('produces deadlines the WHEN step will actually accept', () => {
+    // A picker that offers a date the validator then rejects is worse than no
+    // picker at all.
+    for (const day of upcomingDays(now)) {
+      const draft = { ...EMPTY_DRAFT, dueAt: day }
+      expect(validateStep('WHEN', draft, 2500, now).complete, day.toISOString()).toBe(true)
+    }
   })
 })

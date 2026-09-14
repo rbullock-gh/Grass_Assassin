@@ -11,7 +11,7 @@ import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/them
 import { useLayout } from '@/lib/use-layout'
 import {
   POST_STEPS, EMPTY_DRAFT, validateStep, nextStep, previousStep, canPublish,
-  availablePresets, priceFeedback, suggestedStartingPrice, costBreakdown,
+  availablePresets, upcomingDays, formatDayLabel, priceFeedback, suggestedStartingPrice, costBreakdown,
   YARD_SIZE_LABELS, type PostDraft, type PostStep, type YardSize,
 } from '@/lib/post-flow'
 
@@ -339,6 +339,8 @@ function WhenStep({ draft, onChange }: {
 }) {
   const c = useColors()
   const presets = useMemo(() => availablePresets(new Date()), [])
+  const [pickingDate, setPickingDate] = useState(false)
+  const days = useMemo(() => upcomingDays(new Date()), [])
 
   return (
     <>
@@ -350,8 +352,11 @@ function WhenStep({ draft, onChange }: {
           <Pressable
             key={preset.key}
             onPress={() => {
-              if (resolved) onChange({ dueAt: resolved })
-              else router.push('/(customer)/post/date')
+              // Expanded in place rather than pushed as its own screen: leaving
+              // the wizard to answer one question is how half-filled drafts get
+              // lost.
+              if (resolved) { onChange({ dueAt: resolved }); setPickingDate(false) }
+              else setPickingDate((open) => !open)
             }}
             accessibilityRole="button"
             accessibilityState={{ selected }}
@@ -375,6 +380,37 @@ function WhenStep({ draft, onChange }: {
           </Pressable>
         )
       })}
+
+      {pickingDate ? (
+        <View style={{ gap: space[2] }}>
+          {days.map((day) => {
+            const selected = draft.dueAt?.getTime() === day.getTime()
+            return (
+              <Pressable
+                key={day.toISOString()}
+                onPress={() => onChange({ dueAt: day })}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={[
+                  styles.row,
+                  {
+                    backgroundColor: selected ? c.brandSubtle : c.surface,
+                    borderColor: selected ? c.brand : c.border,
+                    borderWidth: selected ? 2 : 1,
+                  },
+                ]}
+              >
+                <Text style={[textStyles.bodyStrong, { color: selected ? c.brand : c.textPrimary }]}>
+                  {formatDayLabel(day)}
+                </Text>
+                <Text style={[textStyles.caption, { color: c.textTertiary }]}>
+                  by {day.toLocaleTimeString('en-US', { hour: 'numeric' })}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : null}
     </>
   )
 }

@@ -237,6 +237,37 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
       address = rows[0] ?? null
     }
 
+    // The auto-approval deadline is computed here rather than in the app.
+    // The window is admin-configurable per market, so a client that assumed 24h
+    // would start lying to customers the moment someone changed it — and the
+    // lie would be about when their money gets spent.
+    const autoApproveAt = job.status === 'PENDING_APPROVAL' && job.completedAt
+      ? new Date(job.completedAt.getTime() + (await resolvePolicy(deps.db, null)).autoApprovalHours * 3_600_000)
+      : null
+
+    // Fetched separately because claimedByWorkerId is denormalised onto the job
+    // so the single-winner conditional UPDATE can set it atomically — which
+    // means Prisma has no relation to include here.
+    //
+    // Gated on canSeeExact, not merely on "someone claimed it". A stranger
+    // learning that a named person is at a house in this neighbourhood tonight
+    // is a location-inference channel on a real worker — the mirror image of
+    // the address rule, and it deserves the same boundary.
+    const assignedWorker = job.claimedByWorkerId && canSeeExact
+      ? await deps.db.user.findUnique({
+          where: { id: job.claimedByWorkerId },
+          select: {
+            id: true, firstName: true, avatarUrl: true,
+            workerProfile: {
+              select: {
+                averageRating: true, ratingCount: true, completedJobs: true, onTimeRate: true,
+                rank: { select: { key: true, name: true, verifiedBadge: true, colorHex: true } },
+              },
+            },
+          },
+        })
+      : null
+
     const profile = job.customer.customerProfile
 
     return {
@@ -273,6 +304,28 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
         rating: displayableRating(profile?.averageRating ?? null, profile?.jobsCompleted ?? 0),
         completedJobs: profile?.jobsCompleted ?? 0,
       },
+      // Who is coming to the house. The customer cannot see this before anyone
+      // has claimed, because there is nobody to see; once someone has, hiding
+      // it would be worse than useless — a stranger is about to walk onto their
+      // property and they are entitled to know who.
+      //
+      // Reputation only. No email, no phone, no last name: the same rule the
+      // public profile follows, for the same reason.
+      autoApproveAt,
+      worker: assignedWorker
+        ? {
+            id: assignedWorker.id,
+            firstName: assignedWorker.firstName,
+            avatarUrl: assignedWorker.avatarUrl,
+            rating: displayableRating(
+              assignedWorker.workerProfile?.averageRating ?? null,
+              assignedWorker.workerProfile?.ratingCount ?? 0,
+            ),
+            completedJobs: assignedWorker.workerProfile?.completedJobs ?? 0,
+            onTimeRate: assignedWorker.workerProfile?.onTimeRate ?? null,
+            rank: assignedWorker.workerProfile?.rank ?? null,
+          }
+        : null,
       viewerRole: isCustomer ? 'CUSTOMER' : isAssignedWorker ? 'WORKER' : 'VIEWER',
     }
   })

@@ -53,7 +53,12 @@ export interface StepValidation {
   message?: string
 }
 
-export function validateStep(step: PostStep, draft: PostDraft, minPriceCents: number): StepValidation {
+export function validateStep(
+  step: PostStep,
+  draft: PostDraft,
+  minPriceCents: number,
+  now: Date = new Date(),
+): StepValidation {
   switch (step) {
     case 'WHAT':
       return draft.categoryId
@@ -67,7 +72,10 @@ export function validateStep(step: PostStep, draft: PostDraft, minPriceCents: nu
 
     case 'WHEN': {
       if (!draft.dueAt) return { complete: false, message: 'Pick when you need it done by' }
-      if (draft.dueAt.getTime() <= Date.now()) {
+      // Injectable clock, not Date.now(): the deadline boundary is exactly the
+      // case worth testing, and a function that reads the wall clock directly
+      // cannot be tested at its boundary at all.
+      if (draft.dueAt.getTime() <= now.getTime()) {
         return { complete: false, message: 'That time has already passed' }
       }
       if (draft.windowStartAt && draft.windowEndAt && draft.windowEndAt <= draft.windowStartAt) {
@@ -107,23 +115,23 @@ export function previousStep(step: PostStep): PostStep | null {
 }
 
 /** Steps the customer may jump straight to — everything up to the first incomplete one. */
-export function reachableSteps(draft: PostDraft, minPriceCents: number): PostStep[] {
+export function reachableSteps(draft: PostDraft, minPriceCents: number, now: Date = new Date()): PostStep[] {
   const reachable: PostStep[] = []
   for (const step of POST_STEPS) {
     reachable.push(step)
-    if (!validateStep(step, draft, minPriceCents).complete) break
+    if (!validateStep(step, draft, minPriceCents, now).complete) break
   }
   return reachable
 }
 
-export function canPublish(draft: PostDraft, minPriceCents: number): boolean {
-  return POST_STEPS.every((step) => validateStep(step, draft, minPriceCents).complete)
+export function canPublish(draft: PostDraft, minPriceCents: number, now: Date = new Date()): boolean {
+  return POST_STEPS.every((step) => validateStep(step, draft, minPriceCents, now).complete)
 }
 
 /** Which step a resumed draft should open on. */
-export function resumeAt(draft: PostDraft, minPriceCents: number): PostStep {
+export function resumeAt(draft: PostDraft, minPriceCents: number, now: Date = new Date()): PostStep {
   for (const step of POST_STEPS) {
-    if (!validateStep(step, draft, minPriceCents).complete) return step
+    if (!validateStep(step, draft, minPriceCents, now).complete) return step
   }
   return 'PRICE'
 }
@@ -177,6 +185,45 @@ function endOfDayAt(date: Date, hour: number): Date {
  * Offering it at 8pm produces a job nobody can claim, which burns the customer
  * and wastes a worker's tap.
  */
+/**
+ * Days offered when the customer wants a specific date.
+ *
+ * Deliberately an inline list rather than a pushed date-picker screen. Leaving
+ * the wizard to answer one question means either carrying the draft through a
+ * route or handing it back through params, and both are how half-filled drafts
+ * get lost — which on the highest-drop-off funnel in the product is the most
+ * expensive bug available.
+ *
+ * Two weeks out, because yard work planned further ahead than that is a
+ * recurring service, and we have a better answer for those.
+ */
+export const CUSTOM_DATE_DAYS = 14
+
+export function upcomingDays(now: Date, count = CUSTOM_DATE_DAYS): Date[] {
+  const days: Date[] = []
+  for (let offset = 0; offset < count; offset += 1) {
+    const day = endOfDayAt(new Date(now.getTime() + offset * 86_400_000), 19)
+    // A deadline already in the past is not a choice, it is a dead end.
+    if (day.getTime() > now.getTime()) days.push(day)
+  }
+  return days
+}
+
+export function formatDayLabel(day: Date, now = new Date()): string {
+  const days = Math.round(
+    (startOfDay(day).getTime() - startOfDay(now).getTime()) / 86_400_000,
+  )
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  return day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+function startOfDay(date: Date): Date {
+  const result = new Date(date)
+  result.setHours(0, 0, 0, 0)
+  return result
+}
+
 export const LATEST_HOUR_TO_OFFER_TODAY = 16
 
 export function availablePresets(now: Date): DeadlinePreset[] {

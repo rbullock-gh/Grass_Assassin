@@ -32,6 +32,15 @@ export interface Layout {
   /** Landscape on a phone: map left, list right. */
   isPhoneLandscape: boolean
   columns: number
+  /**
+   * Cap for single-column reading surfaces (customer home, job detail, forms).
+   *
+   * Without it a form on a 27" monitor becomes one 2000px-wide input, which is
+   * the "stretched phone interface" failure in reverse — technically
+   * responsive, unusable in practice. Measured in characters, not pixels: ~70
+   * per line is the readable range, and 640 gets there at our base size.
+   */
+  contentMaxWidth: number
 }
 
 export function layoutFor(width: number, height: number): Layout {
@@ -46,5 +55,10 @@ export function layoutFor(width: number, height: number): Layout {
     sheetIsPersistent: sizeClass !== 'compact',
     isPhoneLandscape: sizeClass === 'compact' && isLandscape,
     columns: sizeClass === 'large' ? 3 : sizeClass === 'expanded' ? 2 : 1,
+    // Clamped, not branched on size class. A 600pt viewport — a Flip unfolded,
+    // an iPad in a narrow split — is "medium", and handing it a 640pt cap makes
+    // the page wider than the screen. Min() is the whole rule: never wider than
+    // the viewport, never wider than is readable.
+    contentMaxWidth: Math.min(width, 640),
   }
 }
