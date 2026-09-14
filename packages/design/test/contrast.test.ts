@@ -185,3 +185,28 @@ describe('typography', () => {
     for (let i = 1; i < sizes.length; i++) expect(sizes[i]!).toBeGreaterThan(sizes[i - 1]!)
   })
 })
+
+describe('the "not ready yet" button state', () => {
+  /**
+   * A primary button whose step is incomplete looks greyed out, but it is NOT
+   * disabled: tapping it is how someone finds out what is missing. That makes
+   * its label active text, so WCAG's exemption for inactive components does not
+   * apply and it owes the full 4.5:1.
+   *
+   * Found by measuring a screenshot: the label was textTertiary on
+   * surfaceSunken, which is 2.86:1.
+   */
+  it('keeps the label readable in both themes', () => {
+    for (const [name, theme] of [['light', semanticLight], ['dark', semanticDark]] as const) {
+      const ratio = contrastRatio(theme.textSecondary, theme.surfaceSunken)
+      expect(ratio, `${name}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+    }
+  })
+
+  it('records that textTertiary is NOT good enough for it', () => {
+    // Asserted so the cheaper-looking token is not swapped back in by someone
+    // who reads the greyed-out styling as "disabled, therefore exempt".
+    expect(contrastRatio(semanticLight.textTertiary, semanticLight.surfaceSunken))
+      .toBeLessThan(CONTRAST_AA_NORMAL)
+  })
+})

@@ -66,7 +66,7 @@ export default function SignInScreen() {
         ]}
       >
         {busy ? <ActivityIndicator color={c.onBrand} /> : (
-          <Text style={{ color: ready ? c.onBrand : c.textTertiary, fontWeight: '800', fontSize: 15 }}>
+          <Text style={{ color: ready ? c.onBrand : c.textSecondary, fontWeight: '800', fontSize: 15 }}>
             SIGN IN
           </Text>
         )}

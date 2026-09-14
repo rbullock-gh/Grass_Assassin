@@ -181,7 +181,11 @@ export default function PostJobScreen() {
           ) : (
             <Text
               style={{
-                color: validation.complete ? c.onBrand : c.textTertiary,
+                // textSecondary, not textTertiary: this button is TAPPABLE
+                // when the step is incomplete — tapping it is how the customer
+                // finds out what is missing — so its label is active text and
+                // owes the full 4.5:1. Tertiary on the sunken surface is 2.86.
+                color: validation.complete ? c.onBrand : c.textSecondary,
                 fontWeight: '800', fontSize: 15, letterSpacing: 0.3,
               }}
             >

@@ -158,7 +158,7 @@ export default function MessagesScreen() {
           >
             {sending
               ? <ActivityIndicator color={c.onBrand} size="small" />
-              : <Text style={{ color: canSend ? c.onBrand : c.textTertiary, fontWeight: '800', fontSize: 18 }}>↑</Text>}
+              : <Text style={{ color: canSend ? c.onBrand : c.textSecondary, fontWeight: '800', fontSize: 18 }}>↑</Text>}
           </Pressable>
         </View>
       ) : (
