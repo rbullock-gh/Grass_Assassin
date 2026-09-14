@@ -34,6 +34,7 @@ export default function RootLayout() {
             <Stack.Screen name="(worker)/job/[id]" options={{ title: 'Job details' }} />
             <Stack.Screen name="(worker)/earnings" options={{ title: 'Earnings' }} />
             <Stack.Screen name="(worker)/profile/[id]" options={{ title: 'Pro' }} />
+            <Stack.Screen name="(worker)/leaderboard" options={{ title: 'Leaderboard' }} />
 
             <Stack.Screen name="(customer)/home" options={{ headerShown: false }} />
             <Stack.Screen name="(customer)/post" options={{ title: 'Post a job' }} />
@@ -41,6 +42,7 @@ export default function RootLayout() {
             <Stack.Screen name="(customer)/properties/new" options={{ title: 'Add a property' }} />
 
             {/* One thread per job, reachable from either side. */}
+            <Stack.Screen name="(shared)/messages/index" options={{ title: 'Messages' }} />
             <Stack.Screen name="(shared)/messages/[jobId]" options={{ title: 'Messages' }} />
           </Stack>
         </AuthProvider>

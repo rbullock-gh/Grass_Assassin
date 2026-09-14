@@ -145,9 +145,25 @@ export default function WorkerMapScreen() {
   const listHeader = (
     <View style={styles.listHeader}>
       <View style={styles.listHeadRow}>
-        <Text style={[textStyles.bodyStrong, { color: c.textPrimary }]}>
+        <Text style={[textStyles.bodyStrong, { color: c.textPrimary, flex: 1, minWidth: 110 }]}>
           {loading ? 'Finding jobs…' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} nearby`}
         </Text>
+        <Pressable
+          onPress={() => router.push('/(shared)/messages')}
+          accessibilityRole="button"
+          accessibilityLabel="Messages"
+          style={[styles.filterButton, { backgroundColor: c.surface, borderColor: c.border }]}
+        >
+          <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '700' }}>Messages</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/(worker)/leaderboard')}
+          accessibilityRole="button"
+          accessibilityLabel="Leaderboard"
+          style={[styles.filterButton, { backgroundColor: c.surface, borderColor: c.border }]}
+        >
+          <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '700' }}>Ranks</Text>
+        </Pressable>
         <Pressable
           onPress={() => setFiltersOpen(true)}
           accessibilityRole="button"
@@ -384,7 +400,9 @@ const styles = StyleSheet.create({
   grabber: { width: 34, height: 4, borderRadius: 999, alignSelf: 'center', marginBottom: space[2] },
   banner: { paddingHorizontal: space[4], paddingVertical: space[2], minHeight: minTouchTarget, justifyContent: 'center' },
   listHeader: { paddingHorizontal: space[4], paddingBottom: space[2], gap: space[2] },
-  listHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Wraps rather than squeezing: four items in a space-between row collapse
+  // the job count to two characters on a narrow phone.
+  listHeadRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], flexWrap: 'wrap' },
   filterButton: {
     minHeight: 34, borderWidth: 1, borderRadius: radius.full,
     paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center',

@@ -75,6 +75,10 @@ export default function CustomerHomeScreen() {
         {user?.firstName ? `Hi, ${user.firstName}` : 'Your yard'}
       </Text>
 
+      <View style={styles.quickRow}>
+        <Quick label="Messages" onPress={() => router.push('/(shared)/messages')} />
+      </View>
+
       <Pressable
         onPress={() => router.push('/(customer)/post')}
         accessibilityRole="button"
@@ -115,6 +119,22 @@ export default function CustomerHomeScreen() {
         </>
       )}
     </ScrollView>
+  )
+}
+
+function Quick({ label, onPress }: { label: string; onPress: () => void }) {
+  const c = useColors()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.quick,
+        { borderColor: c.border, backgroundColor: pressed ? c.surfaceSunken : c.surface },
+      ]}
+    >
+      <Text style={{ color: c.textPrimary, fontWeight: '700', fontSize: 13.5 }}>{label}</Text>
+    </Pressable>
   )
 }
 
@@ -199,6 +219,11 @@ const styles = StyleSheet.create({
   cta: {
     marginTop: space[5], minHeight: minTouchTarget + 8, borderRadius: radius.md,
     alignItems: 'center', justifyContent: 'center',
+  },
+  quickRow: { flexDirection: 'row', gap: space[2], marginTop: space[4] },
+  quick: {
+    borderWidth: 1, borderRadius: radius.full, paddingHorizontal: space[4],
+    minHeight: minTouchTarget, alignItems: 'center', justifyContent: 'center',
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   card: {
