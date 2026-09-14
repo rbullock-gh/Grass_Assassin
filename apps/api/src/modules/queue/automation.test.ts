@@ -277,14 +277,14 @@ describe('sweeps', () => {
     await confirmClaimPaid(prisma, job.id, worker.user.id)
     await transitionJob(deps, { jobId: job.id, actorUserId: worker.user.id, actorType: 'WORKER', to: 'EN_ROUTE' })
     await prisma.jobPhoto.create({
-      data: { jobId: job.id, uploadedById: worker.user.id, kind: 'BEFORE', storageKey: 'b', url: 'u' },
+      data: { jobId: job.id, uploadedById: worker.user.id, kind: 'BEFORE', storageKey: 'b', url: 'u', moderationStatus: 'APPROVED' },
     })
     await transitionJob(deps, {
       jobId: job.id, actorUserId: worker.user.id, actorType: 'WORKER', to: 'IN_PROGRESS',
       actorLocation: NASHVILLE,
     })
     await prisma.jobPhoto.create({
-      data: { jobId: job.id, uploadedById: worker.user.id, kind: 'AFTER', storageKey: 'a', url: 'u' },
+      data: { jobId: job.id, uploadedById: worker.user.id, kind: 'AFTER', storageKey: 'a', url: 'u', moderationStatus: 'APPROVED' },
     })
     await transitionJob(deps, { jobId: job.id, actorUserId: worker.user.id, actorType: 'WORKER', to: 'PENDING_APPROVAL' })
 

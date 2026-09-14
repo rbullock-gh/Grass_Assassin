@@ -15,6 +15,9 @@ import { registerJobRoutes } from './routes/jobs.js'
 import { registerPropertyRoutes } from './routes/properties.js'
 import { registerWorkerRoutes } from './routes/workers.js'
 import { registerWebhookRoutes } from './routes/webhooks.js'
+import { registerPhotoRoutes } from './routes/photos.js'
+import { registerRecurringRoutes } from './routes/recurring.js'
+import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
 
 export interface RateLimitSettings {
   enabled: boolean
@@ -33,6 +36,8 @@ declare module 'fastify' {
 export interface ServerDeps {
   db: Db
   provider: PaymentProvider
+  /** Object storage for photos. Defaults to the in-memory fake. */
+  storage?: StorageProvider
   config: {
     accessSecret: string
     accessTtlSeconds: number
@@ -65,6 +70,11 @@ const DEFAULT_RATE_LIMITS = {
 } as const
 
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
+  const resolved: ServerDeps & { storage: StorageProvider } = {
+    ...deps,
+    storage: deps.storage ?? new FakeStorageProvider(),
+  }
+
   const app = Fastify({
     logger: {
       level: deps.config.isProduction ? 'info' : 'warn',
@@ -216,6 +226,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerJobRoutes(instance, deps)
     await registerWorkerRoutes(instance, deps)
     await registerWebhookRoutes(instance, deps)
+    await registerPhotoRoutes(instance, resolved)
+    await registerRecurringRoutes(instance, resolved)
   }, { prefix: '/v1' })
 
   return app

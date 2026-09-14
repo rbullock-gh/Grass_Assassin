@@ -75,6 +75,9 @@ async function addPhoto(jobId: string, kind: 'BEFORE' | 'AFTER') {
     data: {
       jobId, uploadedById: workerUserId, kind,
       storageKey: `k/${kind}`, url: `https://cdn.test/${kind}.jpg`,
+      // APPROVED, as a real confirmed upload would be — a PENDING row is a
+      // presigned upload that may never have landed.
+      moderationStatus: 'APPROVED',
     },
   })
 }

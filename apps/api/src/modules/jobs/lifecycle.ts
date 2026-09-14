@@ -40,7 +40,10 @@ async function loadForTransition(db: Db, jobId: string, actorUserId: string | nu
     select: {
       id: true, status: true, customerId: true, claimedByWorkerId: true,
       dueAt: true, completedAt: true, startedAt: true,
-      photos: { select: { kind: true } },
+      // Only CONFIRMED photos count. A row exists from the moment an upload is
+      // presigned, so counting PENDING ones would let a worker satisfy the
+      // photo gate by requesting an upload URL and never using it.
+      photos: { where: { moderationStatus: { not: 'PENDING' } }, select: { kind: true } },
     },
   })
   if (!job) throw new NotFoundError('Job')
