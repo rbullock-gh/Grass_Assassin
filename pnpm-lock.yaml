@@ -53,6 +53,9 @@ importers:
       pino:
         specifier: ^9.5.0
         version: 9.14.0
+      stripe:
+        specifier: ^22.6.2
+        version: 22.6.2(@types/node@22.20.2)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -66,6 +69,15 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.13
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)
+
+  packages/design:
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -1020,6 +1032,15 @@ packages:
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
 
+  stripe@22.6.2:
+    resolution: {integrity: sha512-PwRE2scocvXqDKPiskMa5vRJEAEkq46W69XyUYmAwrNSLr675lQnfqLwnsndAWizwgihOWw/irLmoFRo3ez7ew==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   thread-stream@3.2.0:
     resolution: {integrity: sha512-zLBvqpwr4Esa0kRjcrzGU6zL25lePWaCLMx0RQFrmteozIfeNdaMLpG5U7PeHzvlFkAWaRKA9/KVW4F60iB+qw==}
 
@@ -1913,6 +1934,10 @@ snapshots:
   stackback@0.0.2: {}
 
   std-env@3.10.0: {}
+
+  stripe@22.6.2(@types/node@22.20.2):
+    optionalDependencies:
+      '@types/node': 22.20.2
 
   thread-stream@3.2.0:
     dependencies:
