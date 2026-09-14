@@ -384,6 +384,8 @@ export interface MeResponse {
     completionRate: number; onTimeRate: number; currentStreak: number
     availableBalanceCents: number; lifetimeEarningsCents: number
     payoutsEnabled: boolean; backgroundCheckStatus: string
+    /** How many services and equipment items this worker has declared. */
+    serviceCount: number; equipmentCount: number
     rank: { key: string; name: string; minPoints: number; commissionDiscountBps: number; verifiedBadge: boolean } | null
   } | null
 }

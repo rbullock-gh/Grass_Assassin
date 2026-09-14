@@ -18,7 +18,14 @@ export default function Index() {
   useEffect(() => {
     if (loading) return
     if (!user) { router.replace('/(auth)/welcome'); return }
-    if (user.roles.includes('WORKER') && user.workerProfile) { router.replace('/(worker)/map'); return }
+
+    if (user.roles.includes('WORKER') && user.workerProfile) {
+      // A worker with no declared services has nothing for job matching to
+      // match on, so they would never be told when work appears and would
+      // conclude there is none. Setup first, map after.
+      router.replace(user.workerProfile.serviceCount > 0 ? '/(worker)/map' : '/(worker)/setup')
+      return
+    }
     router.replace('/(customer)/home')
   }, [user, loading])
 

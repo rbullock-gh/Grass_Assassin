@@ -100,10 +100,27 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps)
             availableBalanceCents: true, lifetimeEarningsCents: true,
             payoutsEnabled: true, backgroundCheckStatus: true,
             rank: { select: { key: true, name: true, minPoints: true, commissionDiscountBps: true, verifiedBadge: true } },
+            // Counted, not listed. The app only needs to know whether this
+            // worker has finished setup — a worker with no declared services
+            // has nothing for job matching to match on, so they would never
+            // hear about work and would conclude there is none.
+            _count: { select: { services: true, equipment: true } },
           },
         },
       },
     })
-    return user
+    if (!user) return user
+
+    return {
+      ...user,
+      workerProfile: user.workerProfile
+        ? {
+            ...user.workerProfile,
+            serviceCount: user.workerProfile._count.services,
+            equipmentCount: user.workerProfile._count.equipment,
+            _count: undefined,
+          }
+        : null,
+    }
   })
 }

@@ -35,6 +35,9 @@ export default function RootLayout() {
             <Stack.Screen name="(worker)/earnings" options={{ title: 'Earnings' }} />
             <Stack.Screen name="(worker)/profile/[id]" options={{ title: 'Pro' }} />
             <Stack.Screen name="(worker)/leaderboard" options={{ title: 'Leaderboard' }} />
+            {/* No header: setup is a one-way door into the app, and a back
+                arrow out of it leads to a map with nothing on it. */}
+            <Stack.Screen name="(worker)/setup" options={{ headerShown: false }} />
 
             <Stack.Screen name="(customer)/home" options={{ headerShown: false }} />
             <Stack.Screen name="(customer)/post" options={{ title: 'Post a job' }} />
