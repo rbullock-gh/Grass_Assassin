@@ -19,7 +19,8 @@ See `docs/03-roadmap-and-team.md`.
 | CI | green — typecheck, full suite against real PostGIS, structural migration-drift check, and an end-to-end smoke run against a live server |
 | Verified end to end | post → search → claim → work → approve → pay → points → rate → tip → recurring, over real HTTP |
 | Verified visually | admin dashboard rendered in Chromium, light + dark + 390px mobile, zero console errors |
-| **Not verified** | the Stripe adapter (no credentials here), push delivery, device geocoding, and **the Expo app's rendered UI** — it typechecks and its logic is tested, but it has not run on a device or simulator |
+| Verified visually (mobile) | every screen rendered in Chromium via the Expo web build — 60 screen × viewport × theme combinations (phone, Fold width, tablet, desktop; light and dark), signed in against the live API, with zero console errors, zero page errors, zero horizontal overflow and no unmatched routes |
+| **Not verified** | the Stripe adapter (no credentials here), push delivery, device geocoding, and **native behaviour on a real iOS/Android device** — the app bundles and renders, but React Native Web is not the same runtime as a phone, so gestures, maps, the camera and SecureStore remain unproven |
 
 Mobile app surfaces: worker map with all seven filters, job detail, claim,
 earnings, public pro profile, leaderboards, customer home, five-step post flow,

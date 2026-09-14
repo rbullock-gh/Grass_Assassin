@@ -3,6 +3,7 @@ dist/
 build/
 .next/
 .expo/
+.expo-web-ci/
 coverage/
 *.tsbuildinfo
 .env

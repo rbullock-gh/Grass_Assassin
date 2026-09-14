@@ -69,6 +69,14 @@ jobs:
       - name: Test
         run: pnpm -r test
 
+      - name: Bundle the mobile app
+        # Typecheck and the unit suite both pass straight over a bundler
+        # failure, because neither of them runs the bundler. The app was at one
+        # point unbundleable — Metro could not resolve the workspace packages'
+        # ESM ".js" specifiers — while every other check was green, so this step
+        # exists specifically to catch that class of break.
+        run: pnpm --filter @grassassassin/mobile exec expo export --platform web --output-dir .expo-web-ci
+
       - name: Create shadow database
         run: |
           PGPASSWORD=grass createdb -h localhost -U grass grassassassin_shadow
