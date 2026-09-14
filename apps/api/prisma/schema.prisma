@@ -1267,6 +1267,12 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
   @@index([action, createdAt])
+  /// Webhook deliveries are recorded here. A PARTIAL unique index on
+  /// (entityType, entityId) WHERE entityType = 'WebhookEvent' enforces
+  /// at-most-once processing — see migration 20260914000002. It cannot be
+  /// declared here because Prisma has no partial-index syntax, and a full
+  /// unique constraint would be wrong: every other entity type legitimately
+  /// has many audit rows.
   @@map("audit_logs")
 }
 

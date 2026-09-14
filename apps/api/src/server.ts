@@ -33,6 +33,7 @@ async function main() {
       refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
       ipSalt: env.JWT_REFRESH_SECRET,
       isProduction: env.NODE_ENV === 'production',
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     },
   })
 

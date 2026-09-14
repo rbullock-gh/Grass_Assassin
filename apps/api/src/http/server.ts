@@ -14,6 +14,7 @@ import { registerAuthRoutes } from './routes/auth.js'
 import { registerJobRoutes } from './routes/jobs.js'
 import { registerPropertyRoutes } from './routes/properties.js'
 import { registerWorkerRoutes } from './routes/workers.js'
+import { registerWebhookRoutes } from './routes/webhooks.js'
 
 export interface RateLimitSettings {
   enabled: boolean
@@ -38,6 +39,8 @@ export interface ServerDeps {
     refreshTtlDays: number
     ipSalt: string
     isProduction: boolean
+    /** Provider webhook signing secret. Webhooks are refused without it. */
+    webhookSecret?: string
     /**
      * Rate limits, configurable so they can be tuned per environment and
      * disabled in tests. Production values are the defaults below — a test
@@ -63,9 +66,42 @@ const DEFAULT_RATE_LIMITS = {
 
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: deps.config.isProduction
-      ? { level: 'info' }
-      : { level: 'warn' },
+    logger: {
+      level: deps.config.isProduction ? 'info' : 'warn',
+      /**
+       * Redaction.
+       *
+       * Fastify's default request serializer does not log headers, but an
+       * unhandled error logged with its full context can carry a bearer token,
+       * a password from a rejected request body, a customer's street address
+       * or a gate code straight into a log aggregator that a far wider group
+       * of people can read than should ever see them.
+       *
+       * Redacting at the logger is the only place this can be enforced once
+       * rather than remembered at every call site.
+       */
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.headers["stripe-signature"]',
+          'res.headers["set-cookie"]',
+          '*.password',
+          '*.currentPassword',
+          '*.newPassword',
+          '*.passwordHash',
+          '*.accessToken',
+          '*.refreshToken',
+          '*.tokenHash',
+          '*.gateCode',
+          '*.addressLine1',
+          '*.addressLine2',
+          '*.phone',
+          'err.meta.password',
+        ],
+        censor: '[redacted]',
+      },
+    },
     // Trust the proxy so rate limiting keys on the real client IP rather than
     // the load balancer's, which would rate-limit every user as one.
     trustProxy: true,
@@ -179,6 +215,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerPropertyRoutes(instance, deps)
     await registerJobRoutes(instance, deps)
     await registerWorkerRoutes(instance, deps)
+    await registerWebhookRoutes(instance, deps)
   }, { prefix: '/v1' })
 
   return app
