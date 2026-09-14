@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { formatCents } from '@grassassassin/shared'
 import type { MapJob } from '@grassassassin/client'
 import {
   sortJobs, applyFilters, countActiveFilters, markerVariantFor, isUrgent,
-  formatDeadline, displayPrice, displayRate, yardSizeLabel, EMPTY_FILTERS,
+  formatDeadline, displayPrice, displayMoney, displayRate, yardSizeLabel, EMPTY_FILTERS,
   toggleFilterValue, toggleCategory, setDeadlineFilter, deadlineFilterOf, describeFilters,
   type Filters,
 } from '@/lib/jobs'
@@ -341,5 +342,45 @@ describe('filter summary line', () => {
       const parts = described === 'All jobs' ? 0 : described.split(' · ').length
       expect(parts, JSON.stringify(f)).toBe(countActiveFilters(f))
     }
+  })
+})
+
+describe('money formatting', () => {
+  it('never shows a worker more money than they have', () => {
+    // The bug this replaced: displayPrice ROUNDS, so $3,527.60 available
+    // rendered as "$3,528". On a balance that is a lie in the worst direction.
+    expect(displayMoney(352_760)).toBe('$3,527.60')
+    expect(displayMoney(352_740)).toBe('$3,527.40')
+  })
+
+  it('keeps every cent', () => {
+    expect(displayMoney(1)).toBe('$0.01')
+    expect(displayMoney(99)).toBe('$0.99')
+    expect(displayMoney(100)).toBe('$1.00')
+    expect(displayMoney(8360)).toBe('$83.60')
+  })
+
+  it('separates thousands so a balance is readable at a glance', () => {
+    expect(displayMoney(100_000_00)).toBe('$100,000.00')
+    expect(displayMoney(123_456_789)).toBe('$1,234,567.89')
+  })
+
+  it('handles zero and negatives without mangling the sign', () => {
+    // A negative balance is a real state after a refund or a chargeback.
+    expect(displayMoney(0)).toBe('$0.00')
+    expect(displayMoney(-2500)).toBe('-$25.00')
+    expect(displayMoney(-1)).toBe('-$0.01')
+  })
+
+  it('agrees with the server on any amount the server would format', () => {
+    // The app and the receipt must not disagree about a number, ever.
+    for (const cents of [0, 1, 99, 100, 2500, 8360, 99_999, 123_456_789]) {
+      expect(displayMoney(cents).replace(/,/g, ''), String(cents)).toBe(formatCents(cents))
+    }
+  })
+
+  it('keeps displayPrice compact for markers, where a glance is the point', () => {
+    expect(displayPrice(9500)).toBe('$95')
+    expect(displayPrice(12_000)).toBe('$120')
   })
 })

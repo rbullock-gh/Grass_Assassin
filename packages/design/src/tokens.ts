@@ -195,21 +195,46 @@ export const letterSpacing = {
 } as const
 
 /** Named text styles, so components never assemble type from raw tokens. */
+/**
+ * Text styles, expressed for React Native.
+ *
+ * lineHeight is in POINTS, not a ratio. React Native reads the value as an
+ * absolute measurement, so `lineHeight: 1.5` collapses every line box to one
+ * and a half points and the text in it overlaps whatever is above. CSS reads
+ * the same unitless number as a multiplier, which is why the ratio form looks
+ * right in a stylesheet and is silently destructive here — the bug survives
+ * typecheck (it is a number either way) and the unit suite (which never
+ * renders), and only appears the moment something is drawn.
+ *
+ * So the ratios stay in `lineHeight` as design intent, and these multiply them
+ * out. Rounded, because a fractional line height produces uneven baselines
+ * between adjacent rows of the same style.
+ */
+const leading = (size: number, ratio: number): number => Math.round(size * ratio)
+
+/**
+ * Tabular numerals, in the form React Native accepts.
+ *
+ * Typed as a mutable tuple rather than `as const`: React Native's TextStyle
+ * declares fontVariant as a mutable array, and a readonly one is rejected.
+ */
+const tabular: { fontVariant: ['tabular-nums'] } = { fontVariant: ['tabular-nums'] }
+
 export const textStyles = {
-  displayLarge: { fontSize: fontSize['4xl'], fontWeight: fontWeight.black,    lineHeight: lineHeight.tight, letterSpacing: letterSpacing.tighter },
-  display:      { fontSize: fontSize['3xl'], fontWeight: fontWeight.bold,     lineHeight: lineHeight.tight, letterSpacing: letterSpacing.tighter },
-  title:        { fontSize: fontSize['2xl'], fontWeight: fontWeight.bold,     lineHeight: lineHeight.snug,  letterSpacing: letterSpacing.tight },
-  heading:      { fontSize: fontSize.xl,     fontWeight: fontWeight.semibold, lineHeight: lineHeight.snug,  letterSpacing: letterSpacing.tight },
-  subheading:   { fontSize: fontSize.lg,     fontWeight: fontWeight.semibold, lineHeight: lineHeight.snug,  letterSpacing: letterSpacing.normal },
-  bodyLarge:    { fontSize: fontSize.md,     fontWeight: fontWeight.regular,  lineHeight: lineHeight.normal, letterSpacing: letterSpacing.normal },
-  body:         { fontSize: fontSize.base,   fontWeight: fontWeight.regular,  lineHeight: lineHeight.normal, letterSpacing: letterSpacing.normal },
-  bodyStrong:   { fontSize: fontSize.base,   fontWeight: fontWeight.semibold, lineHeight: lineHeight.normal, letterSpacing: letterSpacing.normal },
-  caption:      { fontSize: fontSize.sm,     fontWeight: fontWeight.regular,  lineHeight: lineHeight.snug,  letterSpacing: letterSpacing.normal },
-  captionStrong:{ fontSize: fontSize.sm,     fontWeight: fontWeight.semibold, lineHeight: lineHeight.snug,  letterSpacing: letterSpacing.normal },
-  overline:     { fontSize: fontSize.xs,     fontWeight: fontWeight.bold,     lineHeight: lineHeight.snug,  letterSpacing: letterSpacing.wider, textTransform: 'uppercase' as const },
+  displayLarge: { fontSize: fontSize['4xl'], fontWeight: fontWeight.black,    lineHeight: leading(fontSize['4xl'], lineHeight.tight),  letterSpacing: letterSpacing.tighter },
+  display:      { fontSize: fontSize['3xl'], fontWeight: fontWeight.bold,     lineHeight: leading(fontSize['3xl'], lineHeight.tight),  letterSpacing: letterSpacing.tighter },
+  title:        { fontSize: fontSize['2xl'], fontWeight: fontWeight.bold,     lineHeight: leading(fontSize['2xl'], lineHeight.snug),   letterSpacing: letterSpacing.tight },
+  heading:      { fontSize: fontSize.xl,     fontWeight: fontWeight.semibold, lineHeight: leading(fontSize.xl, lineHeight.snug),       letterSpacing: letterSpacing.tight },
+  subheading:   { fontSize: fontSize.lg,     fontWeight: fontWeight.semibold, lineHeight: leading(fontSize.lg, lineHeight.snug),       letterSpacing: letterSpacing.normal },
+  bodyLarge:    { fontSize: fontSize.md,     fontWeight: fontWeight.regular,  lineHeight: leading(fontSize.md, lineHeight.normal),     letterSpacing: letterSpacing.normal },
+  body:         { fontSize: fontSize.base,   fontWeight: fontWeight.regular,  lineHeight: leading(fontSize.base, lineHeight.normal),   letterSpacing: letterSpacing.normal },
+  bodyStrong:   { fontSize: fontSize.base,   fontWeight: fontWeight.semibold, lineHeight: leading(fontSize.base, lineHeight.normal),   letterSpacing: letterSpacing.normal },
+  caption:      { fontSize: fontSize.sm,     fontWeight: fontWeight.regular,  lineHeight: leading(fontSize.sm, lineHeight.snug),       letterSpacing: letterSpacing.normal },
+  captionStrong:{ fontSize: fontSize.sm,     fontWeight: fontWeight.semibold, lineHeight: leading(fontSize.sm, lineHeight.snug),       letterSpacing: letterSpacing.normal },
+  overline:     { fontSize: fontSize.xs,     fontWeight: fontWeight.bold,     lineHeight: leading(fontSize.xs, lineHeight.snug),       letterSpacing: letterSpacing.wider, textTransform: 'uppercase' as const },
   /** Money. Always tabular so columns of prices align. */
-  price:        { fontSize: fontSize.xl,     fontWeight: fontWeight.bold,     lineHeight: lineHeight.tight, letterSpacing: letterSpacing.tight, fontVariantNumeric: 'tabular-nums' as const },
-  priceLarge:   { fontSize: fontSize['3xl'], fontWeight: fontWeight.black,    lineHeight: lineHeight.tight, letterSpacing: letterSpacing.tighter, fontVariantNumeric: 'tabular-nums' as const },
+  price:        { fontSize: fontSize.xl,     fontWeight: fontWeight.bold,     lineHeight: leading(fontSize.xl, lineHeight.tight),      letterSpacing: letterSpacing.tight, ...tabular },
+  priceLarge:   { fontSize: fontSize['3xl'], fontWeight: fontWeight.black,    lineHeight: leading(fontSize['3xl'], lineHeight.tight),  letterSpacing: letterSpacing.tighter, ...tabular },
 } as const
 
 // ---------------------------------------------------------------------------

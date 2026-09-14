@@ -164,8 +164,11 @@ describe('typography', () => {
   it('uses tabular figures everywhere money is displayed', () => {
     // A column of prices whose digits jitter reads as amateur, and price is the
     // most-scanned element in the product.
-    expect(textStyles.price.fontVariantNumeric).toBe('tabular-nums')
-    expect(textStyles.priceLarge.fontVariantNumeric).toBe('tabular-nums')
+    // fontVariant, not fontVariantNumeric: the latter is CSS and React Native
+    // ignores it silently, so this assertion used to pass while the app got no
+    // tabular numerals at all.
+    expect(textStyles.price.fontVariant).toEqual(['tabular-nums'])
+    expect(textStyles.priceLarge.fontVariant).toEqual(['tabular-nums'])
   })
 
   it('keeps body text at or above 15px for outdoor legibility', () => {

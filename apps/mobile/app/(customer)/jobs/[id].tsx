@@ -7,7 +7,7 @@ import type { JobDetail } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
-import { displayPrice, formatDeadline } from '@/lib/jobs'
+import { displayMoney, displayPrice, formatDeadline } from '@/lib/jobs'
 import {
   customerStatus, customerActions, autoApproveNotice, tipOptions,
 } from '@/lib/customer-jobs'
@@ -62,7 +62,7 @@ export default function CustomerJobScreen() {
     if (!job) return
     Alert.alert(
       'Approve this work?',
-      `Your pro will be paid ${displayPrice(job.workerPayoutCents)}. You can still leave a rating afterwards.`,
+      `Your pro will be paid ${displayMoney(job.workerPayoutCents)}. You can still leave a rating afterwards.`,
       [
         { text: 'Not yet', style: 'cancel' },
         { text: 'Approve', onPress: () => void run(() => api.updateJobStatus(job.id, 'APPROVED'), 'Could not approve') },
@@ -98,9 +98,9 @@ export default function CustomerJobScreen() {
       return
     }
 
-    const refund = displayPrice(preview.customerRefundCents)
+    const refund = displayMoney(preview.customerRefundCents)
     const toWorker = preview.workerCompensationCents > 0
-      ? ` Your pro keeps ${displayPrice(preview.workerCompensationCents)} for the time they already committed.`
+      ? ` Your pro keeps ${displayMoney(preview.workerCompensationCents)} for the time they already committed.`
       : ''
 
     Alert.alert(
@@ -138,7 +138,7 @@ export default function CustomerJobScreen() {
     // Confirmed, because this moves money. An accidental tap that charges a
     // card is how an app earns a chargeback and a one-star review at once.
     Alert.alert(
-      `Send a ${displayPrice(amountCents)} tip?`,
+      `Send a ${displayMoney(amountCents)} tip?`,
       `${job.worker?.firstName ?? 'Your pro'} keeps all of it — we take nothing from tips.`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -297,7 +297,7 @@ export default function CustomerJobScreen() {
                 <Text style={{ color: c.textPrimary, fontWeight: '700' }}>{option.label}</Text>
                 {option.amountCents > 0 ? (
                   <Text style={[textStyles.caption, { color: c.textTertiary }]}>
-                    {displayPrice(option.amountCents)}
+                    {displayMoney(option.amountCents)}
                   </Text>
                 ) : null}
               </Pressable>

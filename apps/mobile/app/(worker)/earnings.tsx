@@ -9,7 +9,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useColors, useIsDark, space, radius, textStyles, rankVisuals } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
-import { displayPrice } from '@/lib/jobs'
+import { displayMoney } from '@/lib/jobs'
 import { payoutStatusLabel, progressToNextRank } from '@/lib/earnings'
 
 /**
@@ -78,26 +78,26 @@ export default function EarningsScreen() {
           <View style={[styles.hero, { backgroundColor: c.surface, borderColor: c.border }]}>
             <Text style={[textStyles.overline, { color: c.textTertiary }]}>AVAILABLE NOW</Text>
             <Text style={[textStyles.displayLarge, { color: c.payout }]}>
-              {displayPrice(earnings.availableBalanceCents)}
+              {displayMoney(earnings.availableBalanceCents)}
             </Text>
             {earnings.pendingBalanceCents > 0 ? (
               <Text style={[textStyles.caption, { color: c.textSecondary }]}>
-                {displayPrice(earnings.pendingBalanceCents)} pending — released once each customer approves,
+                {displayMoney(earnings.pendingBalanceCents)} pending — released once each customer approves,
                 or automatically if they do not.
               </Text>
             ) : null}
           </View>
 
           <View style={styles.statRow}>
-            <Stat label="This week" value={displayPrice(earnings.thisWeek.earningsCents)} />
+            <Stat label="This week" value={displayMoney(earnings.thisWeek.earningsCents)} />
             <Stat label="Jobs done" value={String(earnings.thisWeek.jobsCompleted)} />
-            <Stat label="Tips" value={displayPrice(earnings.thisWeek.tipsCents)} />
+            <Stat label="Tips" value={displayMoney(earnings.thisWeek.tipsCents)} />
           </View>
 
           <View style={[styles.panel, { backgroundColor: c.surface, borderColor: c.border }]}>
             <Text style={[textStyles.captionStrong, { color: c.textSecondary }]}>LIFETIME</Text>
             <Text style={[textStyles.heading, { color: c.textPrimary }]}>
-              {displayPrice(earnings.lifetimeEarningsCents)}
+              {displayMoney(earnings.lifetimeEarningsCents)}
             </Text>
           </View>
 
@@ -146,7 +146,7 @@ export default function EarningsScreen() {
                 >
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={[textStyles.bodyStrong, { color: c.textPrimary }]}>
-                      {displayPrice(payout.amountCents)}
+                      {displayMoney(payout.amountCents)}
                       {payout.instant ? ' · instant' : ''}
                     </Text>
                     <Text style={[textStyles.caption, { color: c.textSecondary }]}>

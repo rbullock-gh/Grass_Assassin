@@ -36,6 +36,14 @@ import { FilterSheet } from '@/components/filter-sheet'
 
 const NASHVILLE: LatLng = { lat: 36.1627, lng: -86.7816 }
 
+/**
+ * How long to wait for a GPS fix before searching from the service area.
+ *
+ * Six seconds is roughly the point where a person decides an app is broken. The
+ * real fix is still taken when it lands.
+ */
+const LOCATION_FIX_TIMEOUT_MS = 6000
+
 export default function WorkerMapScreen() {
   const c = useColors()
   const layout = useLayout()
@@ -55,31 +63,57 @@ export default function WorkerMapScreen() {
   const worker = user?.workerProfile ?? null
   const radiusMiles = worker?.serviceRadiusMiles ?? 15
 
-  // Location permission is requested once, and denial is a supported state —
-  // not a dead end. A worker who declines still sees jobs, centred on their
-  // service area instead of their live position.
+  // Getting a location, with a deadline on the WHOLE attempt.
+  //
+  // Both halves can hang, and each has a mundane cause: the permission dialog
+  // waits forever on a worker who saw it and put the phone down, and a cold GPS
+  // in a truck in a rural area can take a minute. Either way the search never
+  // starts and the screen sits there saying "No jobs right now" — which is not
+  // a loading message, it is a false claim, and a worker who reads it closes
+  // the app.
+  //
+  // So: ask, and if the whole thing has not resolved by the deadline, search
+  // from the service area instead. The real position is still taken whenever it
+  // turns up. Jobs on screen beat a more accurate empty screen.
   useEffect(() => {
     let cancelled = false
+    let settled = false
+
+    const useServiceArea = () => {
+      if (cancelled || settled) return
+      settled = true
+      setLocationDenied(true)
+      setLocation(NASHVILLE)
+    }
+
+    const useDeviceLocation = (point: LatLng) => {
+      if (cancelled) return
+      settled = true
+      setLocation(point)
+      setLocationDenied(false)
+    }
+
+    const deadline = setTimeout(useServiceArea, LOCATION_FIX_TIMEOUT_MS)
+
     void (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync()
         if (cancelled) return
-        if (status !== 'granted') {
-          setLocationDenied(true)
-          setLocation(NASHVILLE)
-          return
-        }
+        if (status !== 'granted') { useServiceArea(); return }
+
         const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
         if (cancelled) return
-        setLocation({ lat: position.coords.latitude, lng: position.coords.longitude })
+        // Still applied if the deadline already fired: a late fix upgrades the
+        // service-area view rather than being thrown away.
+        useDeviceLocation({ lat: position.coords.latitude, lng: position.coords.longitude })
       } catch {
-        if (!cancelled) {
-          setLocationDenied(true)
-          setLocation(NASHVILLE)
-        }
+        useServiceArea()
+      } finally {
+        clearTimeout(deadline)
       }
     })()
-    return () => { cancelled = true }
+
+    return () => { cancelled = true; clearTimeout(deadline) }
   }, [])
 
   useEffect(() => {

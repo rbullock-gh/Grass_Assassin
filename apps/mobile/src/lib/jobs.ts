@@ -188,8 +188,32 @@ export const SORT_LABELS: Record<SortKey, string> = {
 }
 
 /** Whole dollars on markers and cards — cents are noise at a glance. */
+/**
+ * A job's price, for a map marker or a card.
+ *
+ * Rounded to whole dollars because a marker is read at a glance from arm's
+ * length and ".00" on every one of forty pins is noise. Job prices are set in
+ * whole dollars, so nothing is actually lost here.
+ *
+ * NEVER use this for a balance. See displayMoney.
+ */
 export function displayPrice(cents: number): string {
   return `$${Math.round(cents / 100)}`
+}
+
+/**
+ * An exact amount of money, for anywhere it is somebody's balance.
+ *
+ * displayPrice ROUNDS, which on a bank balance is a lie in whichever direction
+ * it lands: $3,527.60 available renders as "$3,528" and shows a worker more
+ * money than they have. Money that belongs to someone gets every cent and a
+ * thousands separator.
+ */
+export function displayMoney(cents: number): string {
+  const sign = cents < 0 ? '-' : ''
+  const abs = Math.abs(cents)
+  const dollars = Math.floor(abs / 100).toLocaleString('en-US')
+  return `${sign}$${dollars}.${String(abs % 100).padStart(2, '0')}`
 }
 
 export function displayPayout(cents: number): string {
