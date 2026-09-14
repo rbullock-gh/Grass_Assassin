@@ -323,9 +323,107 @@ async function seedDemoData() {
     }
   }
 
-  // --- open jobs on the map ---
+  // --- completed job history ---
+  //
+  // Without these the dashboard reads \$0 gross volume and 0% claim rate, which
+  // makes a working marketplace look broken. Each completed job writes the same
+  // balanced ledger lines the real settlement path writes, so the trial balance
+  // nets to zero exactly as it would in production.
   const existingJobs = await prisma.job.count()
   if (existingJobs > 0) return
+
+  const workers = await prisma.workerProfile.findMany({
+    where: { status: 'APPROVED' },
+    select: { id: true, userId: true },
+  })
+
+  const historySpecs = [
+    { cat: 'mow-lawn',     price: 6000,  daysAgo: 2,  minutes: 47,  rating: 5 },
+    { cat: 'mow-lawn',     price: 5500,  daysAgo: 3,  minutes: 41,  rating: 5 },
+    { cat: 'yard-cleanup', price: 13500, daysAgo: 4,  minutes: 165, rating: 4 },
+    { cat: 'blow-leaves',  price: 6500,  daysAgo: 5,  minutes: 52,  rating: 5 },
+    { cat: 'trim-bushes',  price: 9000,  daysAgo: 6,  minutes: 88,  rating: 5 },
+    { cat: 'mulch',        price: 15000, daysAgo: 8,  minutes: 140, rating: 4 },
+    { cat: 'weed-eat',     price: 4000,  daysAgo: 9,  minutes: 33,  rating: 5 },
+    { cat: 'pressure-wash',price: 18000, daysAgo: 11, minutes: 120, rating: 5 },
+    { cat: 'mow-lawn',     price: 5800,  daysAgo: 12, minutes: 44,  rating: 5 },
+    { cat: 'edge-driveway',price: 3500,  daysAgo: 13, minutes: 28,  rating: 4 },
+  ]
+
+  for (const [i, spec] of historySpecs.entries()) {
+    const customer = customers[i % customers.length]!
+    const worker = workers[i % workers.length]
+    const category = categories.find((c) => c.slug === spec.cat)
+    if (!category || !worker) continue
+
+    const fee = Math.max(299, Math.round((spec.price * 800) / 10_000))
+    const commission = Math.round((spec.price * 1200) / 10_000)
+    const payout = spec.price - commission
+    const total = spec.price + fee
+
+    const postedAt = new Date(Date.now() - (spec.daysAgo * 86_400_000 + 6 * 3_600_000))
+    const claimedAt = new Date(postedAt.getTime() + (12 + i * 7) * 60_000)
+    const completedAt = new Date(claimedAt.getTime() + spec.minutes * 60_000 + 2 * 3_600_000)
+    const dueAt = new Date(completedAt.getTime() + 4 * 3_600_000)
+
+    const jobId = createId()
+    const location = jitter(customer.point, 1.5)
+    const approx = computeApproximateLocation(location)
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "jobs" (
+        "id","customerId","propertyId","categoryId","title","status",
+        "exactLocation","approxLocation","generalArea",
+        "priceCents","serviceFeeCents","customerTotalCents","workerCommissionCents","workerPayoutCents",
+        "dueAt","yardSize","estimatedMinutes","difficulty","equipmentProvided",
+        "claimedByWorkerId","claimedAt","postedAt","enRouteAt","startedAt",
+        "completedAt","approvedAt","paidAt","closedAt","createdAt","updatedAt"
+      ) VALUES (
+        ${jobId}, ${customer.user.id}, ${customer.propertyId}, ${category.id},
+        ${category.name}, 'CLOSED'::"JobStatus",
+        ST_SetSRID(ST_MakePoint(${location.lng}::float8, ${location.lat}::float8), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(${approx.lng}::float8, ${approx.lat}::float8), 4326)::geography,
+        'Nashville, TN',
+        ${spec.price}, ${fee}, ${total}, ${commission}, ${payout},
+        ${dueAt}, 'QUARTER_TO_HALF'::"YardSize", ${category.baseMinutes},
+        ${category.difficulty >= 4 ? 'HARD' : category.difficulty >= 2 ? 'MODERATE' : 'EASY'}::"Difficulty",
+        false,
+        ${worker.userId}, ${claimedAt}, ${postedAt}, ${claimedAt}, ${claimedAt},
+        ${completedAt}, ${completedAt}, ${completedAt}, ${completedAt}, ${postedAt}, ${completedAt}
+      )
+    `)
+
+    // The same balanced lines the real settlement path writes.
+    await prisma.ledgerEntry.createMany({
+      data: [
+        { jobId, account: `customer:${customer.user.id}`, amountCents: -total, memo: 'Charged for job', createdAt: claimedAt },
+        { jobId, account: 'platform:escrow', amountCents: spec.price, memo: 'Held pending approval', createdAt: claimedAt },
+        { jobId, account: 'platform:revenue', amountCents: fee, memo: 'Customer service fee', createdAt: claimedAt },
+        { jobId, account: 'platform:escrow', amountCents: -spec.price, memo: 'Released on approval', createdAt: completedAt },
+        { jobId, account: `worker:${worker.userId}`, amountCents: payout, memo: 'Job earnings', createdAt: completedAt },
+        { jobId, account: 'platform:revenue', amountCents: commission, memo: 'Worker commission', createdAt: completedAt },
+      ],
+    })
+
+    await prisma.transaction.createMany({
+      data: [
+        { jobId, kind: 'CHARGE', status: 'SUCCEEDED', amountCents: total, stripePaymentIntentId: `pi_demo_${jobId.slice(0, 8)}`, idempotencyKey: `job_${jobId}_capture`, createdAt: claimedAt },
+        { jobId, kind: 'TRANSFER', status: 'SUCCEEDED', amountCents: payout, stripeTransferId: `tr_demo_${jobId.slice(0, 8)}`, idempotencyKey: `job_${jobId}_transfer`, createdAt: completedAt },
+      ],
+    })
+
+    await prisma.review.create({
+      data: {
+        jobId, authorId: customer.user.id, subjectId: worker.userId,
+        direction: 'CUSTOMER_TO_WORKER', rating: spec.rating,
+        comment: spec.rating === 5 ? 'Great work, yard looks fantastic.' : 'Good job overall.',
+        tags: spec.rating === 5 ? ['on time', 'thorough'] : ['on time'],
+        createdAt: completedAt,
+      },
+    })
+  }
+
+  // --- open jobs on the map ---
 
   const jobSpecs = [
     { cat: 'mow-lawn',      price: 6500, hours: 8,   title: 'Mow front and back' },
