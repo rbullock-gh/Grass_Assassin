@@ -18,11 +18,42 @@
 #
 set -euo pipefail
 
-API=http://localhost:4000/v1
+API="${API_BASE_URL:-http://localhost:4000}/v1"
 S=$(date +%s)
 j() { python3 -c "import json,sys; d=json.load(sys.stdin); print(eval('d'+sys.argv[1]))" "$1"; }
-export PGPASSWORD=grass
-sql() { psql -h localhost -U grass -d grassassassin_dev -q -tA -c "$1"; }
+# Connect via DATABASE_URL rather than a hardcoded database name. The first
+# version hardcoded grassassassin_dev, which works locally and fails in CI
+# where the database is named differently — exactly the kind of "works on my
+# machine" the smoke test exists to catch.
+: "${DATABASE_URL:=postgresql://grass:grass@localhost:5432/grassassassin_dev}"
+sql() { psql "$DATABASE_URL" -q -tA -c "$1"; }
+
+: "${API_BASE_URL:=http://localhost:4000}"
+
+# --- preconditions ----------------------------------------------------------
+#
+# Checked up front and reported plainly. The first version failed with
+# "KeyError: 'id'" from a Python one-liner three steps in, which tells whoever
+# is looking nothing about what is actually wrong.
+
+fail() { echo "SMOKE TEST CANNOT RUN: $1" >&2; exit 1; }
+
+curl -sf "$API_BASE_URL/health" > /dev/null \
+  || fail "no API responding at $API_BASE_URL. Start it with 'pnpm dev:api'."
+
+psql "$DATABASE_URL" -tAc 'SELECT 1' > /dev/null 2>&1 \
+  || fail "cannot reach the database at DATABASE_URL."
+
+AREAS=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM service_areas WHERE active = true" 2>/dev/null || echo 0)
+[ "${AREAS:-0}" -gt 0 ] \
+  || fail "no active service area, so every property will be refused. Run 'pnpm --filter @grassassassin/api db:seed'."
+
+CATEGORIES=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM service_categories WHERE active = true" 2>/dev/null || echo 0)
+[ "${CATEGORIES:-0}" -gt 0 ] \
+  || fail "no active job categories. Run 'pnpm --filter @grassassassin/api db:seed'."
+
+echo "Preconditions OK — API up, ${AREAS} service area(s), ${CATEGORIES} categories."
+
 
 echo "── customer + property + job"
 CUST=$(curl -sS -X POST $API/auth/register -H 'content-type: application/json' \

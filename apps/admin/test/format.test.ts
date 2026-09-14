@@ -97,7 +97,28 @@ describe('relativeTime', () => {
   it('falls back to an absolute date beyond a month', () => {
     expect(relativeTime(new Date(Date.now() - 200 * 86_400_000))).toMatch(/\d{4}/)
   })
-  it('handles missing dates', () => {
+  it('handles missing and invalid dates', () => {
     expect(relativeTime(null)).toBe('—')
+    expect(relativeTime(undefined)).toBe('—')
+    expect(relativeTime('not a date')).toBe('—')
+  })
+
+  it('describes FUTURE times as future, not as "just now"', () => {
+    // A suspension expiring in five days rendered as "just now", because a
+    // negative elapsed time fell through the under-a-minute branch. On a
+    // moderation screen that reads as "already over" — the opposite of true.
+    expect(relativeTime(new Date(Date.now() + 5 * 86_400_000))).toBe('in 5d')
+    expect(relativeTime(new Date(Date.now() + 3 * 3_600_000))).toBe('in 3h')
+    expect(relativeTime(new Date(Date.now() + 20 * 60_000))).toBe('in 20m')
+    expect(relativeTime(new Date(Date.now() + 10_000))).toBe('in a moment')
+  })
+
+  it('never renders a future time as a past one', () => {
+    for (const minutes of [1, 5, 59, 61, 1439, 1441, 4320]) {
+      const future = relativeTime(new Date(Date.now() + minutes * 60_000))
+      expect(future, `+${minutes}m rendered as "${future}"`).not.toMatch(/ago$/)
+      const past = relativeTime(new Date(Date.now() - minutes * 60_000))
+      expect(past, `-${minutes}m rendered as "${past}"`).not.toMatch(/^in /)
+    }
   })
 })

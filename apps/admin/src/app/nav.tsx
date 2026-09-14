@@ -16,6 +16,13 @@ const SECTIONS = [
     ],
   },
   {
+    label: 'Trust & safety',
+    items: [
+      { href: '/disputes', text: 'Disputes' },
+      { href: '/reports', text: 'Reports' },
+    ],
+  },
+  {
     label: 'Money',
     items: [
       { href: '/payments', text: 'Ledger' },

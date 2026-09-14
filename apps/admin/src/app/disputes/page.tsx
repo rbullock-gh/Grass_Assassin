@@ -1,0 +1,176 @@
+import { db } from '@/lib/db'
+import { money, relativeTime, titleCase } from '@/lib/format'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * Disputes and fraud signals.
+ *
+ * Both are deliberately HUMAN queues. Nothing here resolves automatically: an
+ * irreversible automated decision on a false positive costs a worker their
+ * income, and the evidence that settles a dispute — geofenced check-in
+ * timestamps, before/after photos, the chat transcript — needs a person to
+ * weigh it.
+ */
+export default async function DisputesPage() {
+  const [disputes, flags, evidenceCounts] = await Promise.all([
+    db.dispute.findMany({
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      take: 50,
+      select: {
+        id: true, reason: true, description: true, status: true,
+        refundCents: true, createdAt: true, resolvedAt: true, resolution: true,
+        job: {
+          select: {
+            id: true, title: true, priceCents: true, generalArea: true,
+            claimedByWorkerId: true, completedAt: true, startedAt: true,
+            customer: { select: { firstName: true } },
+          },
+        },
+      },
+    }),
+    db.fraudFlag.findMany({
+      where: { dismissed: false, reviewedAt: null },
+      orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
+      take: 50,
+      select: { id: true, signal: true, severity: true, jobId: true, userId: true, details: true, createdAt: true },
+    }),
+    db.jobPhoto.groupBy({ by: ['jobId'], _count: true }),
+  ])
+
+  const photosByJob = new Map(evidenceCounts.map((e) => [e.jobId, e._count]))
+  const open = disputes.filter((d) => d.status === 'OPEN' || d.status === 'UNDER_REVIEW')
+
+  return (
+    <>
+      <div className="page-head">
+        <h1>Disputes &amp; flags</h1>
+        <p>
+          Human queues by design. An irreversible automated decision on a false positive costs a
+          worker their income, so nothing here resolves itself.
+        </p>
+      </div>
+
+      <div className="stats">
+        <div className={open.length > 0 ? 'stat alert' : 'stat ok-badge'}>
+          <span className="stat-label">Open disputes</span>
+          <div className="stat-value">{open.length}</div>
+          <div className="stat-sub">{open.length === 0 ? 'Nothing waiting' : 'Awaiting a decision'}</div>
+        </div>
+        <div className={flags.length > 0 ? 'stat' : 'stat ok-badge'}>
+          <span className="stat-label">Unreviewed flags</span>
+          <div className="stat-value">{flags.length}</div>
+          <div className="stat-sub">Surfaced, never auto-actioned</div>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Resolved</span>
+          <div className="stat-value">{disputes.length - open.length}</div>
+          <div className="stat-sub">Of the {disputes.length} shown</div>
+        </div>
+      </div>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Disputes</h2>
+          <span>Evidence strength shown per job</span>
+        </div>
+        <div className="table-wrap">
+          {disputes.length === 0 ? (
+            <p className="empty">No disputes. That is the number to keep.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Job</th><th>Reason</th><th>Status</th>
+                  <th className="num">Value</th><th>Evidence</th><th>Opened</th>
+                </tr>
+              </thead>
+              <tbody>
+                {disputes.map((dispute) => {
+                  const photos = photosByJob.get(dispute.job.id) ?? 0
+                  const geofenced = dispute.job.startedAt !== null
+                  return (
+                    <tr key={dispute.id}>
+                      <td className="strong">
+                        {dispute.job.title}
+                        <div className="muted" style={{ fontSize: 11.5 }}>
+                          {dispute.job.customer.firstName} · {dispute.job.generalArea}
+                        </div>
+                      </td>
+                      <td>
+                        {titleCase(dispute.reason)}
+                        <div className="muted wrap-any" style={{ fontSize: 11.5, maxWidth: 280 }}>
+                          {dispute.description}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`pill ${
+                          dispute.status === 'OPEN' ? 'danger'
+                            : dispute.status === 'UNDER_REVIEW' ? 'warning' : 'success'
+                        }`}>{titleCase(dispute.status)}</span>
+                      </td>
+                      <td className="num">{money(dispute.job.priceCents)}</td>
+                      <td>
+                        {/* The evidence package, at a glance. A dispute with
+                            photos and a geofenced start is answerable; one
+                            without is a judgement call. */}
+                        <span className={`pill ${photos >= 2 && geofenced ? 'success' : photos > 0 || geofenced ? 'warning' : 'danger'}`}>
+                          {photos === 0 && !geofenced
+                            ? 'None'
+                            : `${photos} photo${photos === 1 ? '' : 's'}${geofenced ? ' · on site' : ''}`}
+                        </span>
+                      </td>
+                      <td className="muted">{relativeTime(dispute.createdAt)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <section className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head">
+          <h2>Fraud &amp; abuse signals</h2>
+          <span>Surfaced for review</span>
+        </div>
+        <div className="table-wrap">
+          {flags.length === 0 ? (
+            <p className="empty">No unreviewed signals.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr><th>Signal</th><th>Severity</th><th>Subject</th><th>Detail</th><th>Raised</th></tr>
+              </thead>
+              <tbody>
+                {flags.map((flag) => (
+                  <tr key={flag.id}>
+                    <td className="strong">{titleCase(flag.signal)}</td>
+                    <td>
+                      <span className={`pill ${flag.severity >= 4 ? 'danger' : flag.severity >= 2 ? 'warning' : 'neutral'}`}>
+                        {flag.severity} / 5
+                      </span>
+                    </td>
+                    <td className="muted mono-cell" style={{ maxWidth: 180 }}>
+                      {flag.jobId ?? flag.userId ?? '—'}
+                    </td>
+                    <td className="muted wrap-any" style={{ fontSize: 12, maxWidth: 320 }}>
+                      {flag.details ? JSON.stringify(flag.details) : '—'}
+                    </td>
+                    <td className="muted">{relativeTime(flag.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <p className="note">
+        A chargeback raises a severity-5 flag automatically, but never suspends anyone. The worker
+        keeps working while a person reviews the evidence.
+      </p>
+    </>
+  )
+}
