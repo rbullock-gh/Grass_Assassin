@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { displayPrice, formatDeadline } from '@/lib/jobs'
-import { customerStatus, isLiveForCustomer } from '@/lib/customer-jobs'
+import { customerStatus, isLiveForCustomer, jobSubtitle } from '@/lib/customer-jobs'
 
 /**
  * The customer's home.
@@ -162,6 +162,13 @@ function Empty({ text }: { text: string }) {
   )
 }
 
+/** "Sep 12" — enough to place a finished job in time, nothing more. */
+function shortDate(at: string | Date): string {
+  const date = typeof at === 'string' ? new Date(at) : at
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function JobCard({ job }: { job: JobSummary }) {
   const c = useColors()
   const status = customerStatus(job.status)
@@ -184,7 +191,7 @@ function JobCard({ job }: { job: JobSummary }) {
           {job.category?.name ?? job.title}
         </Text>
         <Text style={[textStyles.caption, { color: c.textSecondary }]}>
-          {status.needsYou ? status.label : `${status.label} · ${formatDeadline(job.dueAt)}`}
+          {jobSubtitle(job, formatDeadline, shortDate)}
         </Text>
       </View>
 

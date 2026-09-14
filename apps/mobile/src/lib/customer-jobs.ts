@@ -58,6 +58,36 @@ export function isLiveForCustomer(job: Pick<JobSummary, 'status'>): boolean {
 }
 
 /**
+ * The one line under a job's name on the customer's home screen.
+ *
+ * A deadline only means something while the work still has to happen. Appending
+ * it to every status produced "Done and paid · Overdue" on a finished job —
+ * technically true of the date, alarming nonsense to the person reading it, and
+ * exactly the sort of thing that survives a test suite and dies on contact with
+ * a screenshot.
+ *
+ * So: a live job gets its deadline, a finished one gets when it finished, and a
+ * cancelled one gets neither.
+ */
+export function jobSubtitle(
+  job: { status: string; dueAt: string | Date; completedAt?: string | Date | null },
+  formatDeadline: (due: string | Date) => string,
+  formatDate: (at: string | Date) => string,
+): string {
+  const status = customerStatus(job.status)
+  if (status.needsYou) return status.label
+  if (status.tone === 'ended') return status.label
+
+  if (status.tone === 'done') {
+    return job.completedAt
+      ? `${status.label} · ${formatDate(job.completedAt)}`
+      : status.label
+  }
+
+  return `${status.label} · ${formatDeadline(job.dueAt)}`
+}
+
+/**
  * What the customer can do about this job right now.
  *
  * Returned as data rather than rendered inline so the rules are testable: the

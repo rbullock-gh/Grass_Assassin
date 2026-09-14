@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { JOB_STATUSES } from '@grassassassin/shared'
 import {
   customerStatus, customerActions, isLiveForCustomer, autoApproveNotice, tipOptions, TIP_PERCENTS,
+  jobSubtitle,
 } from '@/lib/customer-jobs'
 
 describe('customer status wording', () => {
@@ -153,5 +154,46 @@ describe('tip options', () => {
     const amounts = tipOptions(9500).map((option) => option.amountCents)
     expect([...amounts].sort((a, b) => a - b)).toEqual(amounts)
     expect(TIP_PERCENTS[0]).toBe(0)
+  })
+})
+
+describe('job subtitle on the customer home screen', () => {
+  const deadline = () => 'Overdue'
+  const date = () => 'Sep 12'
+
+  it('never calls a finished job overdue', () => {
+    // The bug, caught by a screenshot rather than a test: every non-blocking
+    // status got the deadline appended, so a paid job read "Done and paid ·
+    // Overdue" — true of the date, alarming nonsense to the person reading it.
+    for (const status of ['APPROVED', 'PAID', 'CLOSED']) {
+      const line = jobSubtitle({ status, dueAt: '2026-09-01', completedAt: '2026-09-12' }, deadline, date)
+      expect(line, status).not.toContain('Overdue')
+      expect(line, status).toContain('Sep 12')
+    }
+  })
+
+  it('still shows the deadline while the work has to happen', () => {
+    for (const status of ['POSTED', 'CLAIMED', 'EN_ROUTE', 'IN_PROGRESS']) {
+      expect(jobSubtitle({ status, dueAt: '2026-09-20' }, deadline, date), status).toContain('Overdue')
+    }
+  })
+
+  it('says nothing about dates on a cancelled or expired job', () => {
+    for (const status of ['CANCELLED', 'EXPIRED']) {
+      const line = jobSubtitle({ status, dueAt: '2026-09-01' }, deadline, date)
+      expect(line, status).not.toContain('Overdue')
+      expect(line, status).not.toContain('Sep 12')
+    }
+  })
+
+  it('leads with the ask when the job is blocked on the customer', () => {
+    // "Finished — check the photos and approve" must not be diluted by a date.
+    const line = jobSubtitle({ status: 'PENDING_APPROVAL', dueAt: '2026-09-01' }, deadline, date)
+    expect(line).toBe('Finished — check the photos and approve')
+  })
+
+  it('degrades gracefully when the server sent no completion time', () => {
+    const line = jobSubtitle({ status: 'PAID', dueAt: '2026-09-01', completedAt: null }, deadline, date)
+    expect(line).toBe('Done and paid')
   })
 })

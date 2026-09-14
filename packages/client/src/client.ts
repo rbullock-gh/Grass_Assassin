@@ -438,6 +438,9 @@ export interface JobSummary {
   id: string; title: string; status: string
   priceCents: number; workerPayoutCents: number
   dueAt: string; generalArea: string
+  /** Set once the work was finished. /jobs/mine returns it; null while running. */
+  completedAt?: string | null
+  createdAt?: string
   category?: { name: string; icon: string | null }
 }
 
