@@ -1,0 +1,1287 @@
+// GrassAssassin data model
+// Owner: TONY STARK  ·  See docs/01-architecture.md
+//
+// Conventions used throughout:
+//  · All money is an Int of cents. Never Float, never Decimal-as-float.
+//  · Geography columns are PostGIS `geography(Point,4326)` declared as
+//    Unsupported() — Prisma cannot read/write them, so all spatial access goes
+//    through raw parameterized SQL in src/modules/geo. GIST indexes are created
+//    in the migration, not here, because Prisma cannot express them.
+//  · Every table that participates in money movement or moderation is
+//    append-only where practical, and mutations are mirrored into AuditLog.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ===========================================================================
+// Identity
+// ===========================================================================
+
+enum UserRole {
+  CUSTOMER
+  WORKER
+  ADMIN
+  SUPPORT
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DELETED
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  passwordHash  String
+  firstName     String
+  lastName      String?
+  phone         String?       @unique
+  avatarUrl     String?
+  status        AccountStatus @default(ACTIVE)
+
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+
+  // A single account can act on both sides of the marketplace. Roles is a set,
+  // not a single value, because a worker who also hires someone for their own
+  // yard is a real and desirable case.
+  roles         UserRole[]    @default([CUSTOMER])
+
+  // Denormalised for fast auth checks; derived from suspensions.
+  suspendedUntil DateTime?
+  suspensionReason String?
+
+  lastActiveAt  DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  customerProfile CustomerProfile?
+  workerProfile   WorkerProfile?
+  refreshTokens   RefreshToken[]
+  properties      Property[]
+  postedJobs      Job[]            @relation("JobCustomer")
+  claims          JobClaim[]
+  messages        Message[]
+  notifications   Notification[]
+  reviewsWritten  Review[]         @relation("ReviewAuthor")
+  reviewsReceived Review[]         @relation("ReviewSubject")
+  reportsMade     Report[]         @relation("ReportReporter")
+  reportsAgainst  Report[]         @relation("ReportSubject")
+  blocksMade      UserBlock[]      @relation("BlockBlocker")
+  blocksAgainst   UserBlock[]      @relation("BlockBlocked")
+  auditLogs       AuditLog[]
+  devices         Device[]
+  subscriptions   Subscription[]
+  promoRedemptions PromoRedemption[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The token itself is never stored — only a SHA-256 hash of it.
+  tokenHash  String   @unique
+  // Rotation family. Presenting a token whose family is already revoked means
+  // the token was stolen and replayed, so the entire family is killed.
+  familyId   String
+  revokedAt  DateTime?
+  replacedById String?
+
+  userAgent  String?
+  ipHash     String?
+
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Device {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushToken   String   @unique
+  platform    String   // ios | android | web
+  appVersion  String?
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model CustomerProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId  String?  @unique
+  defaultPaymentMethodId String?
+
+  // Denormalised reputation, recalculated by the reputation worker.
+  averageRating     Float?
+  ratingCount       Int      @default(0)
+  jobsPosted        Int      @default(0)
+  jobsCompleted     Int      @default(0)
+  cancellationCount Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  favoriteWorkers   FavoriteWorker[]
+
+  @@map("customer_profiles")
+}
+
+enum WorkerStatus {
+  PENDING_ONBOARDING
+  PENDING_REVIEW
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum BackgroundCheckStatus {
+  NOT_STARTED
+  PENDING
+  CLEAR
+  CONSIDER
+  FAILED
+}
+
+model WorkerProfile {
+  id            String       @id @default(cuid())
+  userId        String       @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bio           String?
+  status        WorkerStatus @default(PENDING_ONBOARDING)
+
+  // Home base for the service radius. PostGIS point; see migration for the index.
+  baseLocation  Unsupported("geography(Point,4326)")?
+  serviceRadiusMiles Float   @default(10)
+
+  stripeAccountId String?    @unique
+  payoutsEnabled  Boolean    @default(false)
+  chargesEnabled  Boolean    @default(false)
+
+  backgroundCheckStatus BackgroundCheckStatus @default(NOT_STARTED)
+  backgroundCheckId     String?
+  backgroundCheckAt     DateTime?
+
+  // --- Gamification (denormalised; PointTransaction is the source of truth) ---
+  points            Int      @default(0)
+  lifetimePoints    Int      @default(0)
+  rankId            String?
+  rank              Rank?    @relation(fields: [rankId], references: [id])
+  currentStreak     Int      @default(0)
+  longestStreak     Int      @default(0)
+
+  // --- Reputation (recalculated, never written by hand) ---
+  averageRating     Float?
+  ratingCount       Int      @default(0)
+  completedJobs     Int      @default(0)
+  claimedJobs       Int      @default(0)
+  cancelledJobs     Int      @default(0)
+  noShowCount       Int      @default(0)
+  onTimeJobs        Int      @default(0)
+  completionRate    Float    @default(0)
+  onTimeRate        Float    @default(0)
+  responseRateMins  Float?
+  repeatCustomers   Int      @default(0)
+
+  // --- Money ---
+  availableBalanceCents Int   @default(0)
+  pendingBalanceCents   Int   @default(0)
+  lifetimeEarningsCents Int   @default(0)
+
+  // Concurrency guard: a worker may only hold so many in-flight jobs at once.
+  maxActiveJobs     Int      @default(3)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  equipment         WorkerEquipment[]
+  services          WorkerService[]
+  pointTransactions PointTransaction[]
+  payouts           Payout[]
+  leaderboardEntries LeaderboardEntry[]
+  favoritedBy       FavoriteWorker[]
+  badges            WorkerBadge[]
+
+  @@index([status])
+  @@index([points])
+  @@index([rankId])
+  @@map("worker_profiles")
+}
+
+model FavoriteWorker {
+  id                String          @id @default(cuid())
+  customerProfileId String
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  workerProfileId   String
+  workerProfile     WorkerProfile   @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([customerProfileId, workerProfileId])
+  @@map("favorite_workers")
+}
+
+model UserBlock {
+  id         String   @id @default(cuid())
+  blockerId  String
+  blocker    User     @relation("BlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId  String
+  blocked    User     @relation("BlockBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@map("user_blocks")
+}
+
+// ===========================================================================
+// Properties
+// ===========================================================================
+
+enum YardSize {
+  UNDER_QUARTER_ACRE
+  QUARTER_TO_HALF
+  HALF_TO_ONE
+  ONE_TO_TWO
+  OVER_TWO
+}
+
+model Property {
+  id           String   @id @default(cuid())
+  ownerId      String
+  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  label        String   @default("Home")
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  countryCode  String   @default("US")
+
+  // Exact rooftop coordinate. Never exposed to an unclaimed worker.
+  location     Unsupported("geography(Point,4326)")
+
+  yardSize     YardSize
+  lotSizeAcres Float?
+
+  // Access details, released only to the worker holding the active claim.
+  gateCode     String?
+  hasDog       Boolean  @default(false)
+  accessNotes  String?
+
+  // Cached from the geocoder so we never re-bill for the same address.
+  geocodeProvider  String?
+  geocodePlaceId   String?
+  geocodeAccuracy  String?
+
+  archivedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  jobs         Job[]
+  recurringJobs RecurringJob[]
+
+  @@index([ownerId])
+  @@index([postalCode])
+  @@map("properties")
+}
+
+// ===========================================================================
+// Service catalogue
+// ===========================================================================
+
+model ServiceCategory {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String?
+  icon        String?
+  /// 1 (easy) .. 5 (hard). Feeds the points difficulty bonus.
+  difficulty  Int     @default(1)
+  /// Baseline minutes for a quarter-acre lot; scaled by yard size at runtime.
+  baseMinutes Int     @default(45)
+  /// Typical market price range in cents, used for price guidance.
+  typicalLowCents  Int @default(3500)
+  typicalHighCents Int @default(7500)
+  /// Seasonal categories can be switched on and off without a release.
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs        Job[]
+  workerServices WorkerService[]
+  recurringJobs  RecurringJob[]
+
+  @@index([active, sortOrder])
+  @@map("service_categories")
+}
+
+model Equipment {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  name     String
+  icon     String?
+  sortOrder Int    @default(0)
+
+  workers  WorkerEquipment[]
+
+  @@map("equipment")
+}
+
+model WorkerEquipment {
+  id              String        @id @default(cuid())
+  workerProfileId String
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  equipmentId     String
+  equipment       Equipment     @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([workerProfileId, equipmentId])
+  @@map("worker_equipment")
+}
+
+model WorkerService {
+  id              String          @id @default(cuid())
+  workerProfileId String
+  workerProfile   WorkerProfile   @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt       DateTime        @default(now())
+
+  @@unique([workerProfileId, categoryId])
+  @@map("worker_services")
+}
+
+// ===========================================================================
+// Jobs
+// ===========================================================================
+
+enum JobStatus {
+  DRAFT
+  POSTED
+  CLAIM_PENDING_PAYMENT
+  CLAIMED
+  EN_ROUTE
+  IN_PROGRESS
+  PENDING_APPROVAL
+  DISPUTED
+  APPROVED
+  PAID
+  CLOSED
+  CANCELLED
+  EXPIRED
+}
+
+enum Difficulty {
+  EASY
+  MODERATE
+  HARD
+}
+
+model Job {
+  id           String    @id @default(cuid())
+
+  customerId   String
+  customer     User      @relation("JobCustomer", fields: [customerId], references: [id])
+  propertyId   String
+  property     Property  @relation(fields: [propertyId], references: [id])
+  categoryId   String
+  category     ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  title        String
+  description  String?
+  specialInstructions String?
+
+  status       JobStatus @default(DRAFT)
+
+  // --- Location -----------------------------------------------------------
+  // Two columns, deliberately. `exactLocation` mirrors the property and is
+  // returned only to the worker holding the active claim. `approxLocation` is
+  // offset 100-250m at write time and is the ONLY location the public search
+  // query selects. Never recompute the offset per request — averaging fresh
+  // offsets would triangulate the true point. See architecture §6.
+  exactLocation  Unsupported("geography(Point,4326)")
+  approxLocation Unsupported("geography(Point,4326)")
+  /// Coarse display locality, e.g. "Brentwood, TN". Never a street address.
+  generalArea    String
+
+  // --- Money (cents) ------------------------------------------------------
+  priceCents            Int
+  serviceFeeCents       Int
+  customerTotalCents    Int
+  workerCommissionCents Int
+  workerPayoutCents     Int
+
+  // --- Scheduling ---------------------------------------------------------
+  dueAt         DateTime
+  windowStartAt DateTime?
+  windowEndAt   DateTime?
+
+  // --- Work details -------------------------------------------------------
+  yardSize          YardSize?
+  estimatedMinutes  Int?
+  difficulty        Difficulty @default(EASY)
+  equipmentProvided Boolean    @default(false)
+
+  /// Top-quartile payout jobs are eligible for the brief early-access window.
+  isPremium    Boolean  @default(false)
+  /// Customer paid to boost visibility. Affects sort only — never who may claim.
+  isFeatured   Boolean  @default(false)
+  featuredUntil DateTime?
+
+  // --- Claim ---------------------------------------------------------------
+  // Denormalised onto the job so the single-winner conditional UPDATE can guard
+  // on status and set the winner in one atomic statement.
+  claimedByWorkerId String?
+  claimedAt         DateTime?
+  /// Reservation TTL for CLAIM_PENDING_PAYMENT. Expired reservations are swept
+  /// back to POSTED by a worker process.
+  claimExpiresAt    DateTime?
+
+  postedAt      DateTime?
+  enRouteAt     DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  approvedAt    DateTime?
+  paidAt        DateTime?
+  closedAt      DateTime?
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancellationReason String?
+
+  recurringJobId String?
+  recurringJob   RecurringJob? @relation(fields: [recurringJobId], references: [id])
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  photos       JobPhoto[]
+  claims       JobClaim[]
+  statusEvents JobStatusEvent[]
+  conversation Conversation?
+  transactions Transaction[]
+  tips         Tip[]
+  reviews      Review[]
+  disputes     Dispute[]
+  pointTransactions PointTransaction[]
+  ledgerEntries LedgerEntry[]
+
+  // Hot path: the worker map. The GIST index on approxLocation is added in the
+  // migration; this composite covers the non-spatial predicates.
+  @@index([status, dueAt])
+  @@index([customerId, status])
+  @@index([claimedByWorkerId, status])
+  @@index([categoryId, status])
+  @@index([status, postedAt])
+  @@index([claimExpiresAt])
+  @@map("jobs")
+}
+
+enum JobPhotoKind {
+  LISTING
+  BEFORE
+  AFTER
+  ISSUE
+}
+
+model JobPhoto {
+  id         String       @id @default(cuid())
+  jobId      String
+  job        Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  uploadedById String
+  kind       JobPhotoKind
+  storageKey String
+  url        String
+  width      Int?
+  height     Int?
+  bytes      Int?
+  /// Capture location, used as corroborating evidence in disputes.
+  capturedLocation Unsupported("geography(Point,4326)")?
+  capturedAt DateTime?
+  moderationStatus String @default("PENDING")
+  createdAt  DateTime     @default(now())
+
+  @@index([jobId, kind])
+  @@map("job_photos")
+}
+
+enum ClaimOutcome {
+  WON
+  LOST_ALREADY_CLAIMED
+  LOST_NOT_ELIGIBLE
+  LOST_PAYMENT_FAILED
+  RELEASED
+  EXPIRED
+}
+
+/// Every claim attempt, winning or losing, is recorded. Losing attempts are the
+/// raw material for "average time to claim" and for contention analytics.
+model JobClaim {
+  id        String       @id @default(cuid())
+  jobId     String
+  job       Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerId  String
+  worker    User         @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  outcome   ClaimOutcome
+  /// Distance from the worker to the job at claim time, meters.
+  distanceMeters Float?
+  attemptedAt DateTime   @default(now())
+  resolvedAt  DateTime?
+
+  @@index([jobId, outcome])
+  @@index([workerId, attemptedAt])
+  @@map("job_claims")
+}
+
+/// Append-only audit of every lifecycle transition.
+model JobStatusEvent {
+  id         String    @id @default(cuid())
+  jobId      String
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromStatus JobStatus?
+  toStatus   JobStatus
+  actorId    String?
+  actorType  String    // CUSTOMER | WORKER | SYSTEM | ADMIN
+  note       String?
+  /// Where the actor was, when relevant (geofenced start, en-route ping).
+  actorLocation Unsupported("geography(Point,4326)")?
+  createdAt  DateTime  @default(now())
+
+  @@index([jobId, createdAt])
+  @@map("job_status_events")
+}
+
+// ===========================================================================
+// Recurring service — the conversion that makes the unit economics work
+// ===========================================================================
+
+enum RecurrenceInterval {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+model RecurringJob {
+  id          String   @id @default(cuid())
+  customerId  String
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  interval    RecurrenceInterval
+  priceCents  Int
+  /// Offer the previous worker first refusal before opening to the pool.
+  preferredWorkerId String?
+  preferredWorkerHoldMinutes Int @default(120)
+
+  specialInstructions String?
+  equipmentProvided   Boolean @default(false)
+
+  active      Boolean  @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  pausedUntil DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs        Job[]
+
+  @@index([active, nextRunAt])
+  @@map("recurring_jobs")
+}
+
+// ===========================================================================
+// Messaging
+// ===========================================================================
+
+model Conversation {
+  id        String   @id @default(cuid())
+  jobId     String   @unique
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerId String
+  workerId   String
+  lastMessageAt DateTime?
+  closedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  messages  Message[]
+
+  @@index([customerId])
+  @@index([workerId])
+  @@map("conversations")
+}
+
+enum MessageKind {
+  TEXT
+  PHOTO
+  /// Automated status updates render inline in the thread.
+  SYSTEM
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String?
+  sender         User?        @relation(fields: [senderId], references: [id])
+
+  kind           MessageKind  @default(TEXT)
+  body           String?
+  attachmentUrl  String?
+
+  readAt         DateTime?
+  /// Flagged by moderation for containing contact details (disintermediation) or abuse.
+  flagged        Boolean      @default(false)
+  flagReason     String?
+
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ===========================================================================
+// Money
+// ===========================================================================
+
+enum TransactionKind {
+  CHARGE
+  REFUND
+  PARTIAL_REFUND
+  TRANSFER
+  TIP
+  PAYOUT
+  CHARGEBACK
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REVERSED
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  jobId       String?
+  job         Job?              @relation(fields: [jobId], references: [id])
+
+  kind        TransactionKind
+  status      TransactionStatus @default(PENDING)
+  amountCents Int
+  currency    String            @default("usd")
+
+  stripePaymentIntentId String?
+  stripeChargeId        String?
+  stripeTransferId      String?
+  stripeRefundId        String?
+
+  /// Guards against double-processing a retried request or a replayed webhook.
+  idempotencyKey String?        @unique
+
+  failureCode    String?
+  failureMessage String?
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([jobId])
+  @@index([kind, status])
+  @@index([stripePaymentIntentId])
+  @@map("transactions")
+}
+
+/// Double-entry ledger. Every cent that moves gets balanced entries, so the
+/// platform's books can be reconciled against Stripe independently of the
+/// Transaction rows that describe intent.
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  jobId       String?
+  job         Job?     @relation(fields: [jobId], references: [id])
+  transactionId String?
+
+  /// e.g. customer:<id>, worker:<id>, platform:revenue, platform:processing
+  account     String
+  /// Positive = credit to the account, negative = debit.
+  amountCents Int
+  currency    String   @default("usd")
+  memo        String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([account, createdAt])
+  @@index([jobId])
+  @@map("ledger_entries")
+}
+
+enum PayoutStatus {
+  PENDING
+  IN_TRANSIT
+  PAID
+  FAILED
+  CANCELLED
+}
+
+model Payout {
+  id              String        @id @default(cuid())
+  workerProfileId String
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id])
+
+  amountCents     Int
+  feeCents        Int           @default(0)
+  instant         Boolean       @default(false)
+  status          PayoutStatus  @default(PENDING)
+
+  stripePayoutId  String?       @unique
+  arrivalDate     DateTime?
+  failureMessage  String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([workerProfileId, status])
+  @@map("payouts")
+}
+
+model Tip {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromUserId  String
+  toWorkerId  String
+  /// The platform takes nothing from tips. Stated policy, enforced here.
+  amountCents Int
+  stripePaymentIntentId String?
+  createdAt   DateTime @default(now())
+
+  @@index([jobId])
+  @@index([toWorkerId])
+  @@map("tips")
+}
+
+// ===========================================================================
+// Reviews
+// ===========================================================================
+
+enum ReviewDirection {
+  CUSTOMER_TO_WORKER
+  WORKER_TO_CUSTOMER
+}
+
+/// One table, two directions.
+///
+/// The brief listed WorkerRatings and CustomerRatings as separate entities.
+/// Collapsing them into a directed Review avoids duplicating moderation,
+/// aggregation, and dispute logic across two nearly identical tables — and
+/// makes "show me everything about this job" a single query.
+model Review {
+  id         String          @id @default(cuid())
+  jobId      String
+  job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  authorId   String
+  author     User            @relation("ReviewAuthor", fields: [authorId], references: [id])
+  subjectId  String
+  subject    User            @relation("ReviewSubject", fields: [subjectId], references: [id])
+
+  direction  ReviewDirection
+  rating     Int
+  comment    String?
+  /// Structured tags reduce free-text moderation load and give usable data.
+  tags       String[]        @default([])
+
+  hidden     Boolean         @default(false)
+  hiddenReason String?
+
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  // One review per author per job.
+  @@unique([jobId, authorId])
+  @@index([subjectId, hidden])
+  @@map("reviews")
+}
+
+// ===========================================================================
+// Gamification
+// ===========================================================================
+
+model Rank {
+  id        String @id @default(cuid())
+  key       String @unique
+  name      String
+  minPoints Int
+  sortOrder Int
+
+  commissionDiscountBps Int   @default(0)
+  radiusBonusMiles      Float @default(0)
+  earlyAccessMinutes    Int   @default(0)
+  verifiedBadge         Boolean @default(false)
+
+  /// Quality gates. Null means the gate does not apply at this rank.
+  minRating         Float?
+  minCompletionRate Float?
+  minOnTimeRate     Float?
+
+  iconUrl   String?
+  colorHex  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workers   WorkerProfile[]
+
+  @@index([minPoints])
+  @@map("ranks")
+}
+
+/// Configurable point values, editable from the admin dashboard.
+model PointRule {
+  id          String  @id @default(cuid())
+  event       String  @unique
+  points      Int
+  description String?
+  active      Boolean @default(true)
+  updatedAt   DateTime @updatedAt
+
+  @@map("point_rules")
+}
+
+/// Append-only. WorkerProfile.points is a denormalised cache of the sum here.
+model PointTransaction {
+  id              String        @id @default(cuid())
+  workerProfileId String
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  jobId           String?
+  job             Job?          @relation(fields: [jobId], references: [id])
+
+  event           String
+  points          Int
+  /// Running total after this entry, for cheap history rendering and for
+  /// detecting drift against the denormalised cache.
+  balanceAfter    Int
+  note            String?
+  adminId         String?
+
+  createdAt       DateTime      @default(now())
+
+  @@index([workerProfileId, createdAt])
+  @@index([jobId])
+  @@map("point_transactions")
+}
+
+model Badge {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String
+  iconUrl     String?
+  workers     WorkerBadge[]
+
+  @@map("badges")
+}
+
+model WorkerBadge {
+  id              String        @id @default(cuid())
+  workerProfileId String
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  badgeId         String
+  badge           Badge         @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  awardedAt       DateTime      @default(now())
+
+  @@unique([workerProfileId, badgeId])
+  @@map("worker_badges")
+}
+
+enum LeaderboardScope {
+  LOCAL
+  CITY
+  ROOKIE
+}
+
+enum LeaderboardPeriod {
+  WEEKLY
+  MONTHLY
+  ALL_TIME
+}
+
+model Leaderboard {
+  id        String            @id @default(cuid())
+  scope     LeaderboardScope
+  period    LeaderboardPeriod
+  /// Postal cluster for LOCAL, city slug for CITY, null for global ROOKIE.
+  scopeKey  String?
+  periodStart DateTime
+  periodEnd   DateTime
+  computedAt  DateTime?
+
+  entries   LeaderboardEntry[]
+
+  @@unique([scope, period, scopeKey, periodStart])
+  @@map("leaderboards")
+}
+
+model LeaderboardEntry {
+  id              String        @id @default(cuid())
+  leaderboardId   String
+  leaderboard     Leaderboard   @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  workerProfileId String
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  rank            Int
+  points          Int
+  jobsCompleted   Int           @default(0)
+
+  @@unique([leaderboardId, workerProfileId])
+  @@index([leaderboardId, rank])
+  @@map("leaderboard_entries")
+}
+
+// ===========================================================================
+// Trust, safety, and support
+// ===========================================================================
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED_CUSTOMER
+  RESOLVED_WORKER
+  RESOLVED_SPLIT
+  WITHDRAWN
+}
+
+model Dispute {
+  id          String        @id @default(cuid())
+  jobId       String
+  job         Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  openedById  String
+  againstId   String
+
+  reason      String
+  description String
+  status      DisputeStatus @default(OPEN)
+
+  /// Set when resolved with a partial refund.
+  refundCents Int?
+  resolution  String?
+  resolvedById String?
+  resolvedAt  DateTime?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([jobId])
+  @@map("disputes")
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  ACTIONED
+  DISMISSED
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  reporterId  String
+  reporter    User         @relation("ReportReporter", fields: [reporterId], references: [id])
+  subjectId   String
+  subject     User         @relation("ReportSubject", fields: [subjectId], references: [id])
+  jobId       String?
+
+  category    String
+  description String
+  status      ReportStatus @default(OPEN)
+  reviewedById String?
+  reviewedAt  DateTime?
+  action      String?
+
+  createdAt   DateTime     @default(now())
+
+  @@index([status, createdAt])
+  @@index([subjectId])
+  @@map("reports")
+}
+
+/// Fraud and abuse signals are surfaced for human review, never acted on
+/// automatically — an irreversible automated ban on a false positive costs a
+/// worker their income (strategy: automation section).
+model FraudFlag {
+  id        String   @id @default(cuid())
+  userId    String?
+  jobId     String?
+  signal    String
+  severity  Int      @default(1)
+  details   Json?
+  reviewedAt DateTime?
+  reviewedById String?
+  dismissed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([dismissed, severity, createdAt])
+  @@map("fraud_flags")
+}
+
+// ===========================================================================
+// Notifications
+// ===========================================================================
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  SMS
+  IN_APP
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      String
+  title     String
+  body      String
+  data      Json?
+  channel   NotificationChannel @default(PUSH)
+
+  sentAt    DateTime?
+  readAt    DateTime?
+  failedAt  DateTime?
+  failureReason String?
+
+  createdAt DateTime            @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id       String  @id @default(cuid())
+  userId   String
+  category String
+  push     Boolean @default(true)
+  email    Boolean @default(true)
+  sms      Boolean @default(false)
+
+  @@unique([userId, category])
+  @@map("notification_preferences")
+}
+
+// ===========================================================================
+// Commerce configuration
+// ===========================================================================
+
+/// Fees, minimums, and policy knobs. Scoped per market so a new city can launch
+/// with different economics without a code change. scopeKey null = global default.
+model PlatformConfig {
+  id       String  @id @default(cuid())
+  scopeKey String?
+  key      String
+  value    Json
+  description String?
+  updatedById String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([scopeKey, key])
+  @@map("platform_config")
+}
+
+/// Launch gates. The app tells a user honestly that we are not in their area
+/// yet rather than showing them an empty map (strategy R1).
+model ServiceArea {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  /// Polygon boundary; queried with ST_Contains.
+  boundary  Unsupported("geography(Polygon,4326)")?
+  /// Fallback when no polygon is set.
+  centerLocation Unsupported("geography(Point,4326)")?
+  radiusMiles Float?
+
+  active    Boolean  @default(false)
+  launchedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("service_areas")
+}
+
+enum PromoTarget {
+  CUSTOMER
+  WORKER
+}
+
+model PromoCode {
+  id            String      @id @default(cuid())
+  code          String      @unique
+  target        PromoTarget @default(CUSTOMER)
+  description   String?
+
+  /// Exactly one of these is set.
+  amountOffCents Int?
+  percentOffBps  Int?
+
+  maxRedemptions      Int?
+  maxRedemptionsPerUser Int    @default(1)
+  redemptionCount     Int      @default(0)
+  minJobPriceCents    Int?
+
+  startsAt      DateTime?
+  endsAt        DateTime?
+  active        Boolean     @default(true)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  redemptions   PromoRedemption[]
+
+  @@index([active, endsAt])
+  @@map("promo_codes")
+}
+
+model PromoRedemption {
+  id          String    @id @default(cuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId       String?
+  amountCents Int
+  createdAt   DateTime  @default(now())
+
+  @@index([promoCodeId])
+  @@index([userId])
+  @@map("promo_redemptions")
+}
+
+model SubscriptionPlan {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String?
+  priceCents  Int
+  interval    String  @default("month")
+  stripePriceId String?
+
+  /// Benefit knobs, so a plan can be reshaped without a release.
+  commissionDiscountBps Int   @default(0)
+  radiusBonusMiles      Float @default(0)
+  advancedFilters       Boolean @default(false)
+  earningsAnalytics     Boolean @default(false)
+  proBadge              Boolean @default(false)
+
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  PAUSED
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId    String
+  plan      SubscriptionPlan   @relation(fields: [planId], references: [id])
+
+  status    SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId String? @unique
+  currentPeriodEnd DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@map("subscriptions")
+}
+
+// ===========================================================================
+// Audit
+// ===========================================================================
+
+/// Append-only record of every admin action and every money movement.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorType  String   @default("USER")
+
+  action     String
+  entityType String
+  entityId   String?
+
+  before     Json?
+  after      Json?
+  ipHash     String?
+  userAgent  String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+/// Product analytics. Coordinates are bucketed, never exact (strategy R12).
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  sessionId  String?
+  name       String
+  properties Json?
+  /// Coarse ~1km bucket, e.g. "36.16,-86.78".
+  geoBucket  String?
+  createdAt  DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+  @@map("analytics_events")
+}
