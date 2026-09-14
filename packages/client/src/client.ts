@@ -325,6 +325,29 @@ export class GrassAssassinClient {
     return this.request<RecurringJobSummary>('PATCH', `/v1/recurring/${id}`, { body: input })
   }
 
+  // --- photos -------------------------------------------------------------
+
+  /**
+   * Asks for an upload URL.
+   *
+   * The device then PUTs the bytes straight to storage — they never pass
+   * through the API, because a worker on a rural signal uploading four 3MB
+   * images would otherwise hold an API connection open for minutes.
+   */
+  presignPhoto(jobId: string, input: { kind: PhotoKind; contentType: string }) {
+    return this.request<PresignedUpload>('POST', `/v1/jobs/${jobId}/photos/presign`, { body: input })
+  }
+
+  /**
+   * Tells the server the bytes landed.
+   *
+   * Until this is called the photo row is PENDING and does not count toward
+   * the before/after gates, so a presign alone cannot be used to skip them.
+   */
+  confirmPhoto(photoId: string, input: { capturedAt?: string; capturedLocation?: LatLng } = {}) {
+    return this.request<ConfirmedPhoto>('POST', `/v1/photos/${photoId}/confirm`, { body: input })
+  }
+
   // --- messages -----------------------------------------------------------
 
   conversations() {
@@ -531,6 +554,25 @@ export interface WorkerPublicProfile {
     rating: number; comment: string | null; tags: string[]; createdAt: string
     author: { firstName: string; avatarUrl: string | null }
   }>
+}
+
+export type PhotoKind = 'LISTING' | 'BEFORE' | 'AFTER' | 'ISSUE'
+
+export interface PresignedUpload {
+  photoId: string
+  uploadUrl: string
+  /** Must be sent verbatim on the PUT, or storage rejects the upload. */
+  requiredHeaders: Record<string, string>
+  expiresAt: string
+  maxBytes: number
+}
+
+export interface ConfirmedPhoto {
+  id: string
+  kind: PhotoKind
+  url: string
+  bytes: number | null
+  createdAt: string
 }
 
 export interface ChatMessage {

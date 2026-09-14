@@ -6,6 +6,8 @@ import type { JobDetail } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { displayPrice, displayPayout, formatDeadline, yardSizeLabel } from '@/lib/jobs'
+import { PhotoCapture } from '@/components/photo-capture'
+import { gateSatisfied } from '@/lib/photo-upload'
 
 /**
  * Job detail.
@@ -102,6 +104,13 @@ export default function JobDetailScreen() {
   }
 
   const isMine = job.viewerRole === 'WORKER'
+  // Only CONFIRMED photos count. A presigned-but-never-uploaded row is PENDING
+  // and the server does not accept it, so the UI must not either — otherwise
+  // the button says go and the server says no.
+  const beforePhotos = job.photos.filter((photo) => photo.kind === 'BEFORE')
+  const afterPhotos = job.photos.filter((photo) => photo.kind === 'AFTER')
+  const canStart = gateSatisfied('BEFORE', beforePhotos.length)
+  const canComplete = gateSatisfied('AFTER', afterPhotos.length)
   const locked = job.locationPrecision === 'APPROXIMATE'
 
   return (
@@ -181,6 +190,18 @@ export default function JobDetailScreen() {
         )}
       </View>
 
+      {/* The photo gates. The server refuses IN_PROGRESS without a confirmed
+          BEFORE photo and PENDING_APPROVAL without an AFTER, so these appear
+          exactly where the worker is about to be stopped — before the button,
+          not as an error after it. */}
+      {isMine && job.status === 'EN_ROUTE' ? (
+        <PhotoCapture jobId={job.id} kind="BEFORE" existing={beforePhotos} onUploaded={() => void load()} />
+      ) : null}
+
+      {isMine && job.status === 'IN_PROGRESS' ? (
+        <PhotoCapture jobId={job.id} kind="AFTER" existing={afterPhotos} onUploaded={() => void load()} />
+      ) : null}
+
       <View style={styles.actions}>
         {!isMine && job.status === 'POSTED' ? (
           <PrimaryButton
@@ -195,11 +216,21 @@ export default function JobDetailScreen() {
         ) : null}
 
         {isMine && job.status === 'EN_ROUTE' ? (
-          <PrimaryButton label="START WORK" onPress={() => void advance('IN_PROGRESS')} busy={working} />
+          <PrimaryButton
+            label={canStart ? 'START WORK' : 'TAKE A BEFORE PHOTO FIRST'}
+            onPress={() => void advance('IN_PROGRESS')}
+            busy={working}
+            disabled={!canStart}
+          />
         ) : null}
 
         {isMine && job.status === 'IN_PROGRESS' ? (
-          <PrimaryButton label="MARK COMPLETE" onPress={() => void advance('PENDING_APPROVAL')} busy={working} />
+          <PrimaryButton
+            label={canComplete ? 'MARK COMPLETE' : 'TAKE AN AFTER PHOTO FIRST'}
+            onPress={() => void advance('PENDING_APPROVAL')}
+            busy={working}
+            disabled={!canComplete}
+          />
         ) : null}
 
         {isMine && job.status === 'PENDING_APPROVAL' ? (
@@ -225,20 +256,40 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function PrimaryButton({ label, onPress, busy }: { label: string; onPress: () => void; busy?: boolean }) {
+function PrimaryButton({ label, onPress, busy, disabled }: {
+  label: string
+  onPress: () => void
+  busy?: boolean
+  /**
+   * Genuinely not available yet — a gate the server enforces, not a validation
+   * the worker can fix by tapping. So unlike the forms elsewhere in the app,
+   * this one really is inert, and the label says what to do instead.
+   */
+  disabled?: boolean
+}) {
   const c = useColors()
+  const inert = Boolean(busy || disabled)
   return (
     <Pressable
       onPress={onPress}
-      disabled={busy}
+      disabled={inert}
       accessibilityRole="button"
+      accessibilityState={{ disabled: inert }}
       style={({ pressed }) => [
         styles.primary,
-        { backgroundColor: pressed ? c.brandHover : c.brand, opacity: busy ? 0.7 : 1 },
+        {
+          backgroundColor: disabled ? c.surfaceSunken : (pressed ? c.brandHover : c.brand),
+          opacity: busy ? 0.7 : 1,
+        },
       ]}
     >
       {busy ? <ActivityIndicator color={c.onBrand} /> : (
-        <Text style={{ color: c.onBrand, fontWeight: '800', fontSize: 15, letterSpacing: 0.4 }}>{label}</Text>
+        <Text style={{
+          // textSecondary rather than tertiary: 2.86:1 is not enough for a
+          // label that is telling someone what to do next.
+          color: disabled ? c.textSecondary : c.onBrand,
+          fontWeight: '800', fontSize: 15, letterSpacing: 0.4,
+        }}>{label}</Text>
       )}
     </Pressable>
   )

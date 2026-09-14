@@ -111,11 +111,19 @@ curl -sS -X POST $API/jobs/$JID/status -H "authorization: Bearer $WT" -H 'conten
   | python3 -c "import json,sys; d=json.load(sys.stdin); print('   blocked:',d['error']['code'])"
 
 echo "── the upload genuinely lands, then start"
-# Confirm is skipped here: the fake storage lives inside the server process and
-# this script cannot PUT to it, and calling confirm with no object would
-# correctly DELETE the row. Marking it APPROVED is what a real confirmed
-# upload produces.
-sql "UPDATE job_photos SET \"moderationStatus\"='APPROVED', bytes=1200000 WHERE id='$PHOTO1'" > /dev/null
+# A REAL upload now, not a database poke. The fake storage provider serves its
+# own presigned URLs from the API in development, so this exercises the same
+# presign -> PUT -> confirm chain the app does. It used to UPDATE the row
+# directly, which proved the gate but never the upload — and the upload was the
+# part that could not work at all.
+UPLOAD_URL=$(echo "$P1" | j "['uploadUrl']")
+printf '\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01' > /tmp/ga-smoke.jpg
+head -c 900 /dev/zero >> /tmp/ga-smoke.jpg
+printf '\xff\xd9' >> /tmp/ga-smoke.jpg
+curl -sS -X PUT "$UPLOAD_URL" -H 'content-type: image/jpeg' --data-binary @/tmp/ga-smoke.jpg > /dev/null
+curl -sS -X POST $API/photos/$PHOTO1/confirm -H "authorization: Bearer $WT" -H 'content-type: application/json' \
+  -d '{"capturedLocation":{"lat":36.1627,"lng":-86.7816}}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('   uploaded', d.get('bytes'), 'bytes' if 'bytes' in d else d)"
 curl -sS -X POST $API/jobs/$JID/status -H "authorization: Bearer $WT" -H 'content-type: application/json' \
   -d '{"to":"IN_PROGRESS","workerLocation":{"lat":36.1627,"lng":-86.7816}}' \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print('   ->',d.get('status') or d.get('error'))"
@@ -123,7 +131,8 @@ curl -sS -X POST $API/jobs/$JID/status -H "authorization: Bearer $WT" -H 'conten
 echo "── complete and approve"
 P2=$(curl -sS -X POST $API/jobs/$JID/photos/presign -H "authorization: Bearer $WT" -H 'content-type: application/json' -d '{"kind":"AFTER","contentType":"image/jpeg"}')
 PHOTO2=$(echo "$P2" | j "['photoId']")
-sql "UPDATE job_photos SET \"moderationStatus\"='APPROVED' WHERE id='$PHOTO2'" > /dev/null
+curl -sS -X PUT "$(echo "$P2" | j "['uploadUrl']")" -H 'content-type: image/jpeg' --data-binary @/tmp/ga-smoke.jpg > /dev/null
+curl -sS -X POST $API/photos/$PHOTO2/confirm -H "authorization: Bearer $WT" -H 'content-type: application/json' -d '{}' > /dev/null
 curl -sS -X POST $API/jobs/$JID/status -H "authorization: Bearer $WT" -H 'content-type: application/json' -d '{"to":"PENDING_APPROVAL"}' > /dev/null
 curl -sS -X POST $API/jobs/$JID/status -H "authorization: Bearer $CT" -H 'content-type: application/json' -d '{"to":"APPROVED"}' \
   | python3 -c "import json,sys; print('   ->',json.load(sys.stdin)['status'])"

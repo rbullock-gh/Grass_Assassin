@@ -17,6 +17,14 @@ const envSchema = z.object({
 
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Where this server is reachable from a device, in development.
+   *
+   * Set it to the machine's LAN address so a phone on the same network can
+   * complete a photo upload against the local fake storage; localhost on a
+   * phone is the phone.
+   */
+  PUBLIC_BASE_URL: z.string().url().optional(),
   MAPBOX_ACCESS_TOKEN: z.string().optional(),
   GOOGLE_MAPS_API_KEY: z.string().optional(),
   REDIS_URL: z.string().optional(),

@@ -129,7 +129,12 @@ describe('photo upload', () => {
 
     expect(presigned.statusCode).toBe(201)
     const { photoId, uploadUrl, maxBytes } = presigned.json()
-    expect(uploadUrl).toContain('https://storage.test/upload/')
+    // Asserts the CONTRACT rather than the fake's literal path: an absolute URL
+    // the device can PUT to, carrying a signature so the key alone is not
+    // enough to write. Pinning the path made this fail when the fake started
+    // serving uploads from the API itself in development.
+    expect(uploadUrl).toMatch(/^https?:\/\//)
+    expect(uploadUrl).toContain('sig=')
     expect(maxBytes).toBeGreaterThan(0)
 
     const photo = await prisma.jobPhoto.findUniqueOrThrow({ where: { id: photoId } })

@@ -19,6 +19,7 @@
     "@grassassassin/shared": "workspace:*",
     "expo": "~52.0.23",
     "expo-constants": "~17.0.4",
+    "expo-image-picker": "~16.0.6",
     "expo-linking": "~7.0.4",
     "expo-location": "~18.0.4",
     "expo-router": "~4.0.16",

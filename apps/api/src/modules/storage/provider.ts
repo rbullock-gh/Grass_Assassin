@@ -73,11 +73,20 @@ export function extensionFor(contentType: string): string {
  *
  * Models the parts that matter: a key is only writable through a presigned URL
  * that has not expired, and headObject reports what was actually stored.
+ *
+ * `baseUrl` is what makes it usable from a real device. Without it the upload
+ * URL points at a host that does not exist, so the app's own upload path cannot
+ * be exercised in development at all — a worker on the simulator taps TAKE
+ * PHOTO and the PUT goes nowhere. Given a base URL, the API serves the upload
+ * itself (see the dev-storage route) and the whole presign → PUT → confirm
+ * chain works locally exactly as it will against S3.
  */
 export class FakeStorageProvider implements StorageProvider {
   readonly name = 'fake'
   private readonly objects = new Map<string, { bytes: number; contentType: string }>()
   private readonly presigned = new Map<string, { expiresAt: Date; contentType: string; maxBytes: number }>()
+
+  constructor(private readonly baseUrl: string | null = null) {}
 
   async presignUpload(params: {
     keyPrefix: string
@@ -90,10 +99,13 @@ export class FakeStorageProvider implements StorageProvider {
     this.presigned.set(storageKey, {
       expiresAt, contentType: params.contentType, maxBytes: params.maxBytes,
     })
+    const signature = createHash('sha256').update(storageKey).digest('hex').slice(0, 16)
+    const origin = this.baseUrl ?? 'https://storage.test'
+
     return {
-      uploadUrl: `https://storage.test/upload/${storageKey}?sig=${createHash('sha256').update(storageKey).digest('hex').slice(0, 16)}`,
+      uploadUrl: `${origin}/dev-storage/${storageKey}?sig=${signature}`,
       storageKey,
-      publicUrl: `https://cdn.test/${storageKey}`,
+      publicUrl: `${origin}/dev-storage/${storageKey}`,
       requiredHeaders: { 'content-type': params.contentType },
       expiresAt,
     }
@@ -110,7 +122,17 @@ export class FakeStorageProvider implements StorageProvider {
     this.objects.delete(storageKey)
   }
 
-  /** Test helper: simulates the client completing an upload. */
+  /** The signature the upload route checks, so a key alone is not enough. */
+  signatureFor(storageKey: string): string {
+    return createHash('sha256').update(storageKey).digest('hex').slice(0, 16)
+  }
+
+  /** What a grant permits, for the upload route to enforce. */
+  grantFor(storageKey: string): { expiresAt: Date; contentType: string; maxBytes: number } | null {
+    return this.presigned.get(storageKey) ?? null
+  }
+
+  /** Records a completed upload. Also used directly by in-process tests. */
   completeUpload(storageKey: string, bytes: number, contentType = 'image/jpeg'): boolean {
     const grant = this.presigned.get(storageKey)
     if (!grant) return false
@@ -118,6 +140,11 @@ export class FakeStorageProvider implements StorageProvider {
     if (bytes > grant.maxBytes) return false
     this.objects.set(storageKey, { bytes, contentType })
     return true
+  }
+
+  /** Serves a stored object back, so publicUrl resolves in development. */
+  readObject(storageKey: string): { bytes: number; contentType: string } | null {
+    return this.objects.get(storageKey) ?? null
   }
 
   /** Test helper: expires a grant without waiting. */

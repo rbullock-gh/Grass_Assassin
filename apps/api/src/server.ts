@@ -58,6 +58,10 @@ async function main() {
       ipSalt: env.JWT_REFRESH_SECRET,
       isProduction: env.NODE_ENV === 'production',
       webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+      // Development only. Set PUBLIC_BASE_URL to this machine's LAN address
+      // (http://192.168.1.4:4000) and a phone on the same network can complete
+      // a real photo upload against the local fake storage.
+      publicBaseUrl: env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT}`,
     },
   })
 

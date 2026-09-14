@@ -18,6 +18,7 @@ import { registerWebhookRoutes } from './routes/webhooks.js'
 import { registerPhotoRoutes } from './routes/photos.js'
 import { registerRecurringRoutes } from './routes/recurring.js'
 import { registerMessageRoutes } from './routes/messages.js'
+import { registerDevStorageRoutes } from './routes/dev-storage.js'
 import type { PushSender } from '../modules/notifications/notifier.js'
 import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
 
@@ -51,6 +52,13 @@ export interface ServerDeps {
     /** Provider webhook signing secret. Webhooks are refused without it. */
     webhookSecret?: string
     /**
+     * Where this server is reachable, e.g. http://192.168.1.4:4000.
+     *
+     * Used only in development, to make the fake storage provider hand out
+     * upload URLs a phone on the same network can actually reach.
+     */
+    publicBaseUrl?: string
+    /**
      * Rate limits, configurable so they can be tuned per environment and
      * disabled in tests. Production values are the defaults below — a test
      * suite must not be a reason to weaken a real limit.
@@ -76,7 +84,13 @@ const DEFAULT_RATE_LIMITS = {
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const resolved: ServerDeps & { storage: StorageProvider } = {
     ...deps,
-    storage: deps.storage ?? new FakeStorageProvider(),
+    // publicBaseUrl makes the fake provider issue upload URLs that point back
+    // at this server, so the presign → PUT → confirm chain actually works in
+    // development. Without it the URL names a host that does not exist and the
+    // app's upload path cannot be exercised anywhere but production.
+    storage: deps.storage ?? new FakeStorageProvider(
+      deps.config.isProduction ? null : (deps.config.publicBaseUrl ?? null),
+    ),
   }
 
   const app = Fastify({
@@ -234,6 +248,11 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerRecurringRoutes(instance, resolved)
     await registerMessageRoutes(instance, deps)
   }, { prefix: '/v1' })
+
+  // Outside /v1 on purpose: this stands in for S3, which is not part of our
+  // versioned API. Development only, and it refuses to register itself against
+  // a real storage provider.
+  await registerDevStorageRoutes(app, resolved)
 
   return app
 }
