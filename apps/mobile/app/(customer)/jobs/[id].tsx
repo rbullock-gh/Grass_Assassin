@@ -120,17 +120,31 @@ export default function CustomerJobScreen() {
     )
   }, [job, run])
 
-  const rate = useCallback((rating: number) => {
-    if (!job) return
+  // Selected, not submitted. A rating permanently changes a real person's rank
+  // and how much work they get, so a mistap on a 3" target must not be able to
+  // do that — the customer picks, sees what they picked, then confirms.
+  const [pendingRating, setPendingRating] = useState<number | null>(null)
+
+  const submitRating = useCallback(() => {
+    if (!job || pendingRating === null) return
     void run(async () => {
-      await api.reviewJob(job.id, { rating })
+      await api.reviewJob(job.id, { rating: pendingRating })
       setReviewed(true)
     }, 'Could not save your rating')
-  }, [job, run])
+  }, [job, pendingRating, run])
 
   const tip = useCallback((amountCents: number) => {
     if (!job || amountCents === 0) return
-    void run(() => api.tipWorker(job.id, amountCents), 'Could not send the tip')
+    // Confirmed, because this moves money. An accidental tap that charges a
+    // card is how an app earns a chargeback and a one-star review at once.
+    Alert.alert(
+      `Send a ${displayPrice(amountCents)} tip?`,
+      `${job.worker?.firstName ?? 'Your pro'} keeps all of it — we take nothing from tips.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send', onPress: () => void run(() => api.tipWorker(job.id, amountCents), 'Could not send the tip') },
+      ],
+    )
   }, [job, run])
 
   const makeRecurring = useCallback(() => {
@@ -236,19 +250,32 @@ export default function CustomerJobScreen() {
             How did {job.worker?.firstName ?? 'your pro'} do?
           </Text>
           <View style={styles.stars}>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <Pressable
-                key={value}
-                onPress={() => rate(value)}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel={`${value} star${value === 1 ? '' : 's'}`}
-                style={styles.star}
-              >
-                <Text style={{ fontSize: 30, color: c.rank }}>☆</Text>
-              </Pressable>
-            ))}
+            {[1, 2, 3, 4, 5].map((value) => {
+              const filled = pendingRating !== null && value <= pendingRating
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => setPendingRating(value)}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${value} star${value === 1 ? '' : 's'}`}
+                  accessibilityState={{ selected: filled }}
+                  style={styles.star}
+                >
+                  <Text style={{ fontSize: 30, color: filled ? c.rank : c.textTertiary }}>
+                    {filled ? '★' : '☆'}
+                  </Text>
+                </Pressable>
+              )
+            })}
           </View>
+          {pendingRating !== null ? (
+            <Primary
+              label={`SUBMIT ${pendingRating} STAR${pendingRating === 1 ? '' : 'S'}`}
+              onPress={submitRating}
+              busy={busy}
+            />
+          ) : null}
         </View>
       ) : null}
 

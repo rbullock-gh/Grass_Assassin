@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { ApiError } from '@grassassassin/client'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
+import { Input } from '@/components/input'
 
 export default function SignInScreen() {
   const c = useColors()
@@ -78,39 +79,8 @@ export default function SignInScreen() {
   )
 }
 
-export function Input({ label, ...props }: {
-  label: string
-  value: string
-  onChangeText: (text: string) => void
-  placeholder?: string
-  secureTextEntry?: boolean
-  keyboardType?: 'default' | 'email-address' | 'number-pad'
-  autoCapitalize?: 'none' | 'words'
-  autoComplete?: 'email' | 'current-password' | 'new-password' | 'name'
-}) {
-  const c = useColors()
-  return (
-    <View style={{ gap: space[1] }}>
-      <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
-      <TextInput
-        {...props}
-        placeholderTextColor={c.textTertiary}
-        style={[
-          styles.input,
-          { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary },
-        ]}
-      />
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: space[5] },
-  label: { fontSize: 12.5, fontWeight: '700', letterSpacing: 0.3 },
-  input: {
-    borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space[3],
-    minHeight: minTouchTarget, fontSize: 16,
-  },
   error: { marginTop: space[3], fontSize: 14, fontWeight: '600' },
   primary: {
     marginTop: space[5], minHeight: minTouchTarget + 6, borderRadius: radius.md,

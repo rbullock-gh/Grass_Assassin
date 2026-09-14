@@ -9,8 +9,8 @@ import { api } from '@/lib/api'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { YARD_SIZE_LABELS, type YardSize } from '@/lib/post-flow'
-import { Input } from '../../(auth)/sign-in'
-import { addressComplete, formatAddressLine, type AddressDraft } from '@/lib/address'
+import { Input } from '@/components/input'
+import { addressComplete, addressFieldErrors, formatAddressLine, type AddressDraft } from '@/lib/address'
 
 /**
  * Adding a property.
@@ -35,12 +35,16 @@ export default function NewPropertyScreen() {
   const [hasDog, setHasDog] = useState(false)
   const [gateCode, setGateCode] = useState('')
   const [saving, setSaving] = useState(false)
+  // Errors appear only after the customer has tried to save. Flagging a ZIP as
+  // wrong while they are still typing the second digit is nagging, not help.
+  const [showErrors, setShowErrors] = useState(false)
 
   const patch = useCallback((changes: Partial<AddressDraft>) => {
     setDraft((current) => ({ ...current, ...changes }))
   }, [])
 
   const save = useCallback(async () => {
+    if (!addressComplete(draft)) { setShowErrors(true); return }
     setSaving(true)
     try {
       const location = await resolveLocation(draft)
@@ -98,6 +102,10 @@ export default function NewPropertyScreen() {
     })
   }, [patch])
 
+  // The save button stays live even when the form is incomplete: a button that
+  // greys out and says nothing is how someone ready to pay gives up. Tapping it
+  // reveals what is missing instead.
+  const errors = showErrors ? addressFieldErrors(draft) : {}
   const ready = addressComplete(draft)
 
   return (
@@ -132,21 +140,28 @@ export default function NewPropertyScreen() {
             label="Street address" value={draft.addressLine1}
             onChangeText={(addressLine1) => patch({ addressLine1 })}
             placeholder="128 Maple Street"
+            error={errors.addressLine1}
           />
           <Input
             label="Apartment or unit (optional)" value={draft.addressLine2}
             onChangeText={(addressLine2) => patch({ addressLine2 })} placeholder="Apt 4B"
           />
-          <Input label="City" value={draft.city} onChangeText={(city) => patch({ city })} placeholder="Austin" />
+          <Input
+            label="City" value={draft.city} onChangeText={(city) => patch({ city })}
+            placeholder="Nashville" error={errors.city}
+          />
           <View style={{ flexDirection: 'row', gap: space[3] }}>
             <View style={{ flex: 1 }}>
-              <Input label="State" value={draft.state} onChangeText={(state) => patch({ state })} placeholder="TX" autoCapitalize="none" />
+              <Input
+                label="State" value={draft.state} onChangeText={(state) => patch({ state })}
+                placeholder="TN" autoCapitalize="none" error={errors.state}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Input
                 label="ZIP" value={draft.postalCode}
                 onChangeText={(postalCode) => patch({ postalCode })}
-                placeholder="78704" keyboardType="number-pad"
+                placeholder="37203" keyboardType="number-pad" error={errors.postalCode}
               />
             </View>
           </View>
@@ -199,7 +214,7 @@ export default function NewPropertyScreen() {
 
         <Pressable
           onPress={() => void save()}
-          disabled={!ready || saving}
+          disabled={saving}
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.primary,

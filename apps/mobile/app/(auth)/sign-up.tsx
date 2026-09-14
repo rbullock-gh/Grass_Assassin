@@ -5,7 +5,7 @@ import { router } from 'expo-router'
 import { ApiError } from '@grassassassin/client'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
-import { Input } from './sign-in'
+import { Input } from '@/components/input'
 
 /** Passwords must be at least this long — matched to the server's rule. */
 const MIN_PASSWORD_LENGTH = 10
