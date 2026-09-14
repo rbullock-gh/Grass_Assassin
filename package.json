@@ -1,0 +1,21 @@
+{
+  "name": "grassassassin",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "db:migrate": "pnpm --filter @grassassassin/api db:migrate",
+    "db:seed": "pnpm --filter @grassassassin/api db:seed",
+    "dev:api": "pnpm --filter @grassassassin/api dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
