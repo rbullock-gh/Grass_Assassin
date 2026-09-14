@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  # A newer push supersedes an in-flight run on the same branch. Without this,
+  # a busy branch queues runs that are already obsolete.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+
+    services:
+      # PostGIS, not plain Postgres. The integration tests deliberately use a
+      # real database because the behaviour under test — row-level locking
+      # under concurrent conditional UPDATEs, and spatial radius search —
+      # exists only inside Postgres. A mock would assert nothing about either.
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: grass
+          POSTGRES_PASSWORD: grass
+          POSTGRES_DB: grassassassin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_test
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @grassassassin/api db:generate
+
+      - name: Apply migrations
+        run: pnpm --filter @grassassassin/api db:deploy
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test
+        run: pnpm -r test
+
+      - name: Create shadow database
+        run: |
+          PGPASSWORD=grass createdb -h localhost -U grass grassassassin_shadow
+
+      - name: Check migrations match the schema
+        # Catches a schema.prisma edit that was never turned into a migration —
+        # which passes every test locally and then fails on deploy. Checks for
+        # STRUCTURAL drift only; see the script for why a plain
+        # `migrate diff --exit-code` cannot be used here.
+        env:
+          SHADOW_DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_shadow
+        run: bash scripts/check-migration-drift.sh
+
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+    needs: verify
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: grass
+          POSTGRES_PASSWORD: grass
+          POSTGRES_DB: grassassassin_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_smoke
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
+      PORT: 4000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @grassassassin/api db:generate
+      - run: pnpm --filter @grassassassin/api db:deploy
+      - run: pnpm --filter @grassassassin/api db:seed
+
+      - name: Start the API
+        run: |
+          pnpm --filter @grassassassin/api dev > /tmp/api.log 2>&1 &
+          for _ in $(seq 1 40); do
+            curl -sf http://localhost:4000/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/health || { cat /tmp/api.log; exit 1; }
+
+      - name: Drive the full marketplace loop
+        run: bash scripts/smoke-test.sh
+
+      - name: API log
+        if: failure()
+        run: cat /tmp/api.log

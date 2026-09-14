@@ -1,0 +1,57 @@
+name: Security
+
+on:
+  pull_request:
+  schedule:
+    # Weekly, so a newly disclosed advisory in an unchanged dependency is still
+    # found. Vulnerabilities appear without anyone pushing code.
+    - cron: "0 9 * * 1"
+
+jobs:
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit
+        # High and critical fail the build; moderate and low are reported.
+        run: |
+          pnpm audit --audit-level high || {
+            echo "::error::High or critical advisories found."
+            exit 1
+          }
+          pnpm audit --audit-level low || true
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Look for committed credentials
+        run: |
+          # Deliberately narrow: live Stripe keys, AWS access keys and private
+          # key blocks. A broad regex produces noise that people learn to ignore,
+          # which is worse than no check.
+          if git grep -nIE '(sk_live_[0-9a-zA-Z]{20,}|rk_live_[0-9a-zA-Z]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)' -- . ':(exclude).github/workflows/*'; then
+            echo "::error::Possible credential committed."
+            exit 1
+          fi
+          echo "No credentials found."
+
+      - name: Ensure .env files are not tracked
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production)$'; then
+            echo "::error::An .env file is tracked. Remove it and rotate anything it contained."
+            exit 1
+          fi
+          echo "No .env files tracked."
