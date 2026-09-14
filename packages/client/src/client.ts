@@ -388,6 +388,7 @@ export interface JobSummary {
 
 export interface JobDetail extends JobSummary {
   description: string | null; specialInstructions: string | null
+  yardSize: string | null
   serviceFeeCents?: number; customerTotalCents?: number
   estimatedMinutes: number | null; difficulty: string; equipmentProvided: boolean
   location: LatLng | null

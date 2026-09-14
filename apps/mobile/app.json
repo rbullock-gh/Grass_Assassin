@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "GrassAssassin",
+    "slug": "grassassassin",
+    "version": "0.1.0",
+    "orientation": "default",
+    "scheme": "grassassassin",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": { "resizeMode": "contain", "backgroundColor": "#0C682F" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.grassassassin.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "GrassAssassin shows you yard jobs near you and confirms you have arrived at a job you claimed.",
+        "NSCameraUsageDescription": "Take before and after photos of your work, which protect you if a customer disputes the job.",
+        "NSPhotoLibraryUsageDescription": "Attach photos of your yard so pros know what to expect."
+      }
+    },
+    "android": {
+      "package": "com.grassassassin.app",
+      "adaptiveIcon": { "backgroundColor": "#0C682F" },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "CAMERA"]
+    },
+    "web": { "bundler": "metro", "output": "single" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-location", {
+        "locationAlwaysAndWhenInUsePermission": "GrassAssassin uses your location to show nearby jobs and confirm arrival."
+      }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

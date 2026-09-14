@@ -130,7 +130,15 @@ export const semanticDark = {
   rankSubtle:       'rgba(217, 162, 27, 0.18)',
 } as const
 
-export type SemanticColors = typeof semanticLight
+/**
+ * The semantic colour contract.
+ *
+ * Declared as an explicit record of strings rather than `typeof semanticLight`.
+ * Inferring from the light palette gives every key a string LITERAL type, which
+ * makes the dark palette — whose values differ by definition — fail to satisfy
+ * the same type. The contract is the set of keys, not their light values.
+ */
+export type SemanticColors = { readonly [K in keyof typeof semanticLight]: string }
 
 // ---------------------------------------------------------------------------
 // Typography

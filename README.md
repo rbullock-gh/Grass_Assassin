@@ -8,15 +8,17 @@ done, the customer approves, the worker gets paid, and both sides rate each othe
 
 ## Status
 
-**Phases 0–3 are complete and tested. The API is a working marketplace.**
-Phase 4 (mobile and web clients) has not started. See `docs/03-roadmap-and-team.md`.
+**Phases 0–4 are built. The API is a working marketplace, the admin dashboard
+is visually verified, and the Expo app is written and typechecked.**
+See `docs/03-roadmap-and-team.md`.
 
 | | |
 |---|---|
-| Tests passing | **303** (86 domain · 186 API integration · 31 design) |
+| Tests passing | **382** (86 domain · 186 API · 47 mobile · 31 design · 16 client · 16 admin) |
 | Database | PostgreSQL 16 + PostGIS 3.4 · 48 tables · 6 GIST indexes · 18 CHECK constraints |
 | Verified end to end | post → search → claim → work → approve → pay → points, over real HTTP |
-| Not yet verified | the Stripe adapter itself (no credentials here), push delivery, mobile/web clients |
+| Verified visually | admin dashboard rendered in Chromium, light + dark + 390px mobile, zero console errors |
+| **Not verified** | the Stripe adapter (no credentials here), push delivery, and **the Expo app's rendered UI** — it typechecks and its logic is tested, but it has not run on a device or simulator |
 
 The full loop has been executed against a running server, not just unit-tested:
 a customer posts a job, a worker finds it on the map, claims it, the second
@@ -65,6 +67,10 @@ packages/
     src/geo/              distance · privacy offset
     src/contracts/        zod wire contracts
   design/                 design tokens with verified WCAG contrast
+  client/                 typed API client shared by mobile, web, and admin
+apps/
+  admin/                  Next.js operations dashboard
+  mobile/                 Expo app — worker map, job detail, claim flow
 docs/
 ```
 
@@ -113,6 +119,9 @@ pnpm -r test        # 303 tests; the API suite needs the database
 pnpm -r typecheck
 
 pnpm dev:api        # http://localhost:4000 — /health, /v1/categories, /v1/leaderboard
+
+pnpm --filter @grassassassin/admin dev     # http://localhost:3001
+pnpm --filter @grassassassin/mobile start  # Expo — needs a device or simulator
 ```
 
 Copy `.env.example` to `.env` for the full variable list.

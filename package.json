@@ -27,6 +27,12 @@
       "prisma",
       "argon2",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "react": "18.3.1",
+      "react-dom": "18.3.1",
+      "@types/react": "18.3.31",
+      "@types/react-dom": "18.3.7"
+    }
   }
 }
