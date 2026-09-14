@@ -2,8 +2,9 @@ import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import {
-  createJobSchema, searchJobsSchema, claimJobSchema, jobStatusUpdateSchema,
-  createReviewSchema, tipSchema, latLngSchema, metersToMiles, quoteJob,
+  createJobSchema, searchJobsQuerySchema, claimJobSchema, jobStatusUpdateSchema,
+  createReviewSchema, tipSchema, queryBoolean, metersToMiles, quoteJob,
+  endOfLocalDay, endOfLocalWeek,
   type JobStatus,
 } from '@grassassassin/shared'
 import type { ServerDeps } from '../server.js'
@@ -122,18 +123,10 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
 
   app.get('/jobs/search', async (request) => {
     const identity = requireIdentity(request)
-    const query = searchJobsSchema.parse({
-      ...(request.query as Record<string, unknown>),
-      // Query strings arrive as strings; coerce the numeric and boolean fields.
-      lat: Number((request.query as Record<string, unknown>)['lat']),
-      lng: Number((request.query as Record<string, unknown>)['lng']),
-      radiusMiles: (request.query as Record<string, unknown>)['radiusMiles']
-        ? Number((request.query as Record<string, unknown>)['radiusMiles']) : undefined,
-      minPayoutCents: (request.query as Record<string, unknown>)['minPayoutCents']
-        ? Number((request.query as Record<string, unknown>)['minPayoutCents']) : undefined,
-      limit: (request.query as Record<string, unknown>)['limit']
-        ? Number((request.query as Record<string, unknown>)['limit']) : undefined,
-    })
+    // Query-string schema, not the JSON one: a query string carries only
+    // strings, and coercing them by hand at each call site is how
+    // `Boolean("false") === true` bugs get in.
+    const query = searchJobsQuerySchema.parse(request.query)
 
     const worker = await deps.db.workerProfile.findUnique({
       where: { userId: identity.userId },
@@ -147,10 +140,13 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
       : 15
     const radiusMiles = Math.min(query.radiusMiles, allowedRadius)
 
+    // Computed in the WORKER's timezone, not the server's. See the
+    // tzOffsetMinutes note in the contract.
+    const now = new Date()
     const dueBefore = query.dueToday
-      ? new Date(new Date().setHours(23, 59, 59, 999))
+      ? endOfLocalDay(now, query.tzOffsetMinutes ?? 0)
       : query.dueThisWeek
-        ? new Date(Date.now() + 7 * 86_400_000)
+        ? endOfLocalWeek(now, query.tzOffsetMinutes ?? 0)
         : undefined
 
     const rows = await searchNearbyJobs(deps.db, {
@@ -285,7 +281,9 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
     const identity = requireIdentity(request)
     const query = z.object({
       role: z.enum(['CUSTOMER', 'WORKER']).default('CUSTOMER'),
-      active: z.coerce.boolean().optional(),
+      // queryBoolean, not z.coerce.boolean(): the latter applies Boolean(),
+      // and Boolean("false") is true — so ?active=false would filter TO active.
+      active: queryBoolean.optional(),
     }).parse(request.query)
 
     const activeStatuses: JobStatus[] = ['POSTED', 'CLAIM_PENDING_PAYMENT', 'CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PENDING_APPROVAL', 'DISPUTED']
@@ -343,18 +341,11 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
       }
     }
 
+    // confirmClaimPaid performs the CLAIM_PENDING_PAYMENT -> CLAIMED transition
+    // and opens the conversation. Nothing further is needed here.
     await confirmClaimPaid(deps.db, params.id, identity.userId)
-    await transitionJob(deps, {
-      jobId: params.id, actorUserId: null, actorType: 'SYSTEM', to: 'CLAIMED',
-    }).catch(() => undefined) // confirmClaimPaid already moved it; this only creates the conversation
 
-    await deps.db.conversation.upsert({
-      where: { jobId: params.id },
-      create: { jobId: params.id, customerId: (await deps.db.job.findUniqueOrThrow({ where: { id: params.id }, select: { customerId: true } })).customerId, workerId: identity.userId },
-      update: {},
-    })
-
-    return { ...claim, status: 'CLAIMED' }
+    return { ...claim, status: 'CLAIMED' as const }
   })
 
   // --- lifecycle ----------------------------------------------------------
@@ -534,6 +525,5 @@ async function loadJobForOwner(deps: ServerDeps, jobId: string, ownerId: string)
     },
   })
   if (job.customerId !== ownerId) throw new ForbiddenError('That is not your job')
-  void latLngSchema
   return job
 }

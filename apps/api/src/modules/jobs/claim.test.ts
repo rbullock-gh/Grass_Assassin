@@ -306,6 +306,33 @@ describe('reservation lifecycle', () => {
     expect(after.claimedByWorkerId).toBe(user.id)
   })
 
+  it('opens the conversation when the claim is confirmed', async () => {
+    // This used to be done by a call at the route layer that always threw and
+    // was swallowed by a .catch(). A worker standing on a customer's lawn with
+    // no way to message them is not an acceptable failure mode, so it now lives
+    // in confirmClaimPaid where every path that confirms a claim gets it.
+    const job = await createJob({ customerId, propertyId, categoryId })
+    const { user } = await createWorker({ categoryId })
+    await attemptClaim(prisma, { jobId: job.id, workerUserId: user.id })
+
+    expect(await prisma.conversation.findUnique({ where: { jobId: job.id } })).toBeNull()
+
+    await confirmClaimPaid(prisma, job.id, user.id)
+
+    const conversation = await prisma.conversation.findUniqueOrThrow({ where: { jobId: job.id } })
+    expect(conversation.customerId).toBe(customerId)
+    expect(conversation.workerId).toBe(user.id)
+  })
+
+  it('does not open a conversation for a reservation that was never confirmed', async () => {
+    const job = await createJob({ customerId, propertyId, categoryId })
+    const { user } = await createWorker({ categoryId })
+    await attemptClaim(prisma, { jobId: job.id, workerUserId: user.id })
+    await releaseReservation(prisma, job.id, user.id, 'card_declined')
+
+    expect(await prisma.conversation.findUnique({ where: { jobId: job.id } })).toBeNull()
+  })
+
   it('refuses to let a different worker confirm someone else\'s reservation', async () => {
     const job = await createJob({ customerId, propertyId, categoryId })
     const winner = await createWorker({ categoryId })

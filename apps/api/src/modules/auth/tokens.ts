@@ -173,7 +173,7 @@ export async function rotateSession(db: Db, params: {
   // Revoke-and-issue in one transaction. A crash between the two would either
   // strand the user with no valid token or leave two live tokens in the family,
   // and the second would trip reuse detection on the next refresh.
-  const created = await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     const next = await tx.refreshToken.create({
       data: {
         userId: existing.userId,
@@ -190,7 +190,6 @@ export async function rotateSession(db: Db, params: {
     })
     return next
   })
-  void created
 
   const accessToken = await signAccessToken({
     userId: existing.userId,

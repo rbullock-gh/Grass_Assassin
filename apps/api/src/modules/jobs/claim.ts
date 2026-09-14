@@ -278,7 +278,7 @@ async function recordAttempt(
  * different worker's flow cannot hijack the job.
  */
 export async function confirmClaimPaid(db: Db, jobId: string, workerUserId: string): Promise<boolean> {
-  const rows = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+  const rows = await db.$queryRaw<Array<{ id: string; customerId: string }>>(Prisma.sql`
     UPDATE "jobs"
        SET "status"         = 'CLAIMED'::"JobStatus",
            "claimExpiresAt" = NULL,
@@ -286,9 +286,10 @@ export async function confirmClaimPaid(db: Db, jobId: string, workerUserId: stri
      WHERE "id"                = ${jobId}
        AND "status"            = 'CLAIM_PENDING_PAYMENT'::"JobStatus"
        AND "claimedByWorkerId" = ${workerUserId}
-    RETURNING "id"
+    RETURNING "id", "customerId"
   `)
-  if (rows.length === 0) return false
+  const job = rows[0]
+  if (!job) return false
 
   await db.jobStatusEvent.create({
     data: {
@@ -296,6 +297,17 @@ export async function confirmClaimPaid(db: Db, jobId: string, workerUserId: stri
       actorId: null, actorType: 'SYSTEM', note: 'Payment captured',
     },
   })
+
+  // Open the conversation here rather than at the call site. This is the exact
+  // moment the claim becomes real, and putting it anywhere else means every
+  // path that confirms a claim has to remember to do it — which is how a
+  // worker ends up unable to message the customer whose lawn they are standing on.
+  await db.conversation.upsert({
+    where: { jobId },
+    create: { jobId, customerId: job.customerId, workerId: workerUserId },
+    update: {},
+  })
+
   return true
 }
 

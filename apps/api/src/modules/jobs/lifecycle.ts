@@ -110,16 +110,10 @@ export async function transitionJob(deps: SettlementDeps, ctx: TransitionContext
 
   // --- apply --------------------------------------------------------------
 
-  const timestamps: Record<string, Date> = {}
-  if (ctx.to === 'EN_ROUTE') timestamps['enRouteAt'] = now
-  if (ctx.to === 'IN_PROGRESS') timestamps['startedAt'] = now
-  if (ctx.to === 'PENDING_APPROVAL') timestamps['completedAt'] = now
-  if (ctx.to === 'APPROVED') timestamps['approvedAt'] = now
-  if (ctx.to === 'PAID') timestamps['paidAt'] = now
-  if (ctx.to === 'CLOSED') timestamps['closedAt'] = now
-
   // Guarded on the current status so two concurrent transitions cannot both
-  // apply — the same compare-and-set discipline as the claim.
+  // apply — the same compare-and-set discipline as the claim. The per-status
+  // timestamp is set in the same statement so a crash cannot leave a job in a
+  // state without the timestamp that proves when it got there.
   const updated = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     UPDATE "jobs"
        SET "status" = ${ctx.to}::"JobStatus", "updatedAt" = ${now}

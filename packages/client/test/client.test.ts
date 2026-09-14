@@ -257,3 +257,37 @@ describe('base url handling', () => {
     expect(calls[0]!.url).toBe('https://api.test/v1/categories')
   })
 })
+
+describe('timezone', () => {
+  it('sends the device timezone offset so "due today" means the user\'s today', async () => {
+    const { impl, calls } = scriptedFetch([() => json({ jobs: [], radiusMilesApplied: 10 })])
+    const client = new GrassAssassinClient({ baseUrl: 'https://api.test', fetchImpl: impl })
+
+    await client.searchJobs({ center: { lat: 36.16, lng: -86.78 }, dueToday: true })
+
+    const url = new URL(calls[0]!.url)
+    expect(url.searchParams.has('tzOffsetMinutes')).toBe(true)
+    expect(Number(url.searchParams.get('tzOffsetMinutes'))).toBe(new Date().getTimezoneOffset())
+  })
+
+  it('lets a caller override the offset', async () => {
+    const { impl, calls } = scriptedFetch([() => json({ jobs: [], radiusMilesApplied: 10 })])
+    const client = new GrassAssassinClient({ baseUrl: 'https://api.test', fetchImpl: impl })
+
+    await client.searchJobs({ center: { lat: 36.16, lng: -86.78 }, tzOffsetMinutes: 600 })
+
+    expect(new URL(calls[0]!.url).searchParams.get('tzOffsetMinutes')).toBe('600')
+  })
+
+  it('sends offset 0 rather than omitting it for a UTC device', async () => {
+    // `?? ` not `|| ` — an offset of 0 is a real value, and `||` would replace
+    // it with the device default, which is the same thing here but would be a
+    // latent bug the moment the default changed.
+    const { impl, calls } = scriptedFetch([() => json({ jobs: [], radiusMilesApplied: 10 })])
+    const client = new GrassAssassinClient({ baseUrl: 'https://api.test', fetchImpl: impl })
+
+    await client.searchJobs({ center: { lat: 36.16, lng: -86.78 }, tzOffsetMinutes: 0 })
+
+    expect(new URL(calls[0]!.url).searchParams.get('tzOffsetMinutes')).toBe('0')
+  })
+})

@@ -53,23 +53,20 @@ export class FakePaymentProvider implements PaymentProvider {
     return value
   }
 
-  async createCustomer(params: { email: string }): Promise<string> {
+  async createCustomer(_params: { email: string }): Promise<string> {
     const ref = this.id('cus')
     this.customers.add(ref)
     this.calls.push({ op: 'createCustomer' })
-    void params
     return ref
   }
 
-  async createSetupIntent(customerRef: string): Promise<{ clientSecret: string; setupIntentId: string }> {
+  async createSetupIntent(_customerRef: string): Promise<{ clientSecret: string; setupIntentId: string }> {
     const setupIntentId = this.id('seti')
     this.calls.push({ op: 'createSetupIntent' })
-    void customerRef
     return { clientSecret: `${setupIntentId}_secret`, setupIntentId }
   }
 
-  async listPaymentMethods(customerRef: string): Promise<PaymentMethodRef[]> {
-    void customerRef
+  async listPaymentMethods(_customerRef: string): Promise<PaymentMethodRef[]> {
     return [{ id: 'pm_test_visa', brand: 'visa', last4: '4242' }]
   }
 
@@ -79,7 +76,9 @@ export class FakePaymentProvider implements PaymentProvider {
     return this.cached(params.idempotencyKey, (): ChargeResult => {
       const injected = this.failures.nextChargeFailure
       if (injected) {
-        this.failures.nextChargeFailure = undefined as never
+        // One-shot: injecting a failure must not make every later charge fail,
+        // or a test that exercises recovery silently tests nothing.
+        delete this.failures.nextChargeFailure
         return {
           paymentIntentId: this.id('pi'),
           chargeId: null,
@@ -131,7 +130,7 @@ export class FakePaymentProvider implements PaymentProvider {
     })
   }
 
-  async createConnectedAccount(params: { email: string; country: string }): Promise<string> {
+  async createConnectedAccount(_params: { email: string; country: string }): Promise<string> {
     const ref = this.id('acct')
     this.accounts.set(ref, {
       accountRef: ref,
@@ -141,12 +140,10 @@ export class FakePaymentProvider implements PaymentProvider {
       requirementsDue: ['individual.verification.document'],
     })
     this.calls.push({ op: 'createConnectedAccount' })
-    void params
     return ref
   }
 
-  async createAccountOnboardingLink(accountRef: string, returnUrl: string): Promise<string> {
-    void returnUrl
+  async createAccountOnboardingLink(accountRef: string, _returnUrl: string): Promise<string> {
     return `https://connect.example.test/onboard/${accountRef}`
   }
 

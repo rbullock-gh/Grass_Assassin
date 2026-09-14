@@ -120,12 +120,10 @@ export function viewportRadiusMeters(viewport: Viewport): number {
  */
 export function shouldRefetch(previous: Viewport, next: Viewport, thresholdFraction = 0.3): boolean {
   if (Math.abs(previous.zoom - next.zoom) >= 0.5) return true
-  const perPixel = metersPerPixel(next.center.lat, next.zoom)
   const movedPixels = Math.hypot(
     toScreen(next.center, previous).x - previous.width / 2,
     toScreen(next.center, previous).y - previous.height / 2,
   )
-  void perPixel
   return movedPixels > Math.min(previous.width, previous.height) * thresholdFraction
 }
 

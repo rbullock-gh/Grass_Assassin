@@ -35,6 +35,35 @@ export const passwordSchema = z
   .max(200)
 
 // ---------------------------------------------------------------------------
+// Query-string coercion
+// ---------------------------------------------------------------------------
+
+/**
+ * HTTP query strings carry only strings, so a schema written for a JSON body
+ * rejects them. These helpers bridge that gap correctly.
+ *
+ * `z.coerce.boolean()` is NOT usable here and is a genuine trap: it applies
+ * JavaScript's Boolean(), and `Boolean("false") === true`. A filter written
+ * with it silently returns the opposite of what the user asked for — which is
+ * far worse than a validation error, because nobody notices.
+ */
+export const queryBoolean = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+  .transform((value) => (typeof value === 'boolean' ? value : value === 'true' || value === '1'))
+
+/**
+ * A repeated query parameter arrives as an array, but a SINGLE occurrence
+ * arrives as a bare string. Both must be accepted, or filtering by exactly one
+ * category — the common case — fails.
+ */
+export function queryArray<T extends z.ZodTypeAny>(item: T) {
+  return z.union([z.array(item), item.transform((value: z.infer<T>) => [value])])
+}
+
+/** Numbers from a query string, rejecting garbage rather than defaulting silently. */
+export const queryNumber = z.coerce.number()
+
+// ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
@@ -148,6 +177,39 @@ export const searchJobsSchema = z.object({
   cursor: z.string().optional(),
 })
 export type SearchJobsInput = z.infer<typeof searchJobsSchema>
+
+/**
+ * The same search, as it arrives over a query string.
+ *
+ * Kept as a separate schema rather than making the canonical one lenient: the
+ * JSON body schema should still reject a string where a boolean belongs, and
+ * only the HTTP edge needs the coercion.
+ */
+export const searchJobsQuerySchema = z.object({
+  lat: queryNumber.pipe(latitudeSchema),
+  lng: queryNumber.pipe(longitudeSchema),
+  radiusMiles: queryNumber.pipe(z.number().positive().max(100)).default(15),
+  minPayoutCents: queryNumber.pipe(z.number().int().nonnegative()).optional(),
+  categoryIds: queryArray(cuidSchema).optional(),
+  equipmentProvided: queryBoolean.optional(),
+  difficulty: difficultySchema.optional(),
+  dueToday: queryBoolean.optional(),
+  dueThisWeek: queryBoolean.optional(),
+  /**
+   * The client's UTC offset in minutes, as Date.getTimezoneOffset() reports it
+   * (positive WEST of UTC).
+   *
+   * Without this, "due today" means today in the SERVER's timezone. A worker in
+   * Honolulu querying a UTC server would be shown jobs due tomorrow morning
+   * their time as "today", and would miss jobs actually due today. For a
+   * location-based marketplace that is not an edge case.
+   */
+  tzOffsetMinutes: queryNumber.pipe(z.number().int().min(-840).max(840)).optional(),
+  sort: jobSortSchema.default('DISTANCE'),
+  limit: queryNumber.pipe(z.number().int().min(1).max(100)).default(50),
+  cursor: z.string().optional(),
+})
+export type SearchJobsQuery = z.infer<typeof searchJobsQuerySchema>
 
 /**
  * A job as seen by a worker who has NOT claimed it.

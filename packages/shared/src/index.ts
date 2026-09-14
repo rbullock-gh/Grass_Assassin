@@ -1,5 +1,6 @@
 export * from './domain/job-status.js'
 export * from './domain/pricing.js'
 export * from './domain/points.js'
+export * from './domain/deadlines.js'
 export * from './geo/index.js'
 export * from './contracts/index.js'

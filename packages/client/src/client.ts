@@ -233,6 +233,10 @@ export class GrassAssassinClient {
       query: {
         lat: input.center.lat,
         lng: input.center.lng,
+        // Sent so "due today" means today where the USER is, not where the
+        // server is. Defaults to this device's offset rather than making every
+        // caller remember.
+        tzOffsetMinutes: input.tzOffsetMinutes ?? new Date().getTimezoneOffset(),
         radiusMiles: input.radiusMiles,
         minPayoutCents: input.minPayoutCents,
         categoryIds: input.categoryIds,
@@ -407,6 +411,8 @@ export interface SearchJobsInput {
   minPayoutCents?: number; categoryIds?: string[]
   equipmentProvided?: boolean; difficulty?: string
   dueToday?: boolean; dueThisWeek?: boolean
+  /** From Date.getTimezoneOffset(); defaults to the current device. */
+  tzOffsetMinutes?: number
   sort?: 'DISTANCE' | 'PAY_DESC' | 'NEWEST' | 'DUE_SOON' | 'PAY_PER_HOUR'
   limit?: number
 }
