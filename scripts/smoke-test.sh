@@ -80,6 +80,24 @@ curl -sS -X POST $API/jobs/$JID/claim -H "authorization: Bearer $WT" -H 'content
 echo "── conversation opened on claim?"
 sql "SELECT '   conversation: '||count(*) FROM conversations WHERE \"jobId\"='$JID'"
 
+echo "── the two parties can actually talk, and a stranger cannot"
+# Over HTTP rather than in the database, because the in-process suite cannot
+# catch a route that is registered but unreachable.
+curl -sS -X POST $API/jobs/$JID/messages -H "authorization: Bearer $WT" -H 'content-type: application/json' \
+  -d '{"body":"On my way, about 15 minutes out"}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('   worker sent:', (d.get('message') or {}).get('body') or d.get('error'))"
+curl -sS $API/jobs/$JID/messages -H "authorization: Bearer $CT" \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"   customer sees {len(d.get('messages',[]))} message(s) from {d['counterpart']['firstName']}\")"
+
+# Flagged, never blocked: the message must still be delivered.
+curl -sS -X POST $API/jobs/$JID/messages -H "authorization: Bearer $WT" -H 'content-type: application/json' \
+  -d '{"body":"text me at 615-555-0123 instead"}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('   phone number delivered:', bool(d.get('message')), '| flagged with a notice:', bool(d.get('notice')))"
+sql "SELECT '   flagged in db: '||COALESCE(string_agg(\"flagReason\",','),'none') FROM messages m JOIN conversations c ON c.id=m.\"conversationId\" WHERE c.\"jobId\"='$JID' AND m.flagged"
+
+STRANGER=$(curl -sS -o /dev/null -w '%{http_code}' $API/jobs/$JID/messages)
+echo "   unauthenticated read: HTTP $STRANGER (401 expected)"
+
 echo "── en route"
 curl -sS -X POST $API/jobs/$JID/status -H "authorization: Bearer $WT" -H 'content-type: application/json' -d '{"to":"EN_ROUTE"}' > /dev/null
 echo "   EN_ROUTE"

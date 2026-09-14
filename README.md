@@ -14,11 +14,17 @@ See `docs/03-roadmap-and-team.md`.
 
 | | |
 |---|---|
-| Tests passing | **382** (86 domain · 186 API · 47 mobile · 31 design · 16 client · 16 admin) |
+| Tests passing | **687** (123 domain · 327 API · 169 mobile · 31 design · 19 client · 18 admin) |
 | Database | PostgreSQL 16 + PostGIS 3.4 · 48 tables · 6 GIST indexes · 18 CHECK constraints |
-| Verified end to end | post → search → claim → work → approve → pay → points, over real HTTP |
+| CI | green — typecheck, full suite against real PostGIS, structural migration-drift check, and an end-to-end smoke run against a live server |
+| Verified end to end | post → search → claim → work → approve → pay → points → rate → tip → recurring, over real HTTP |
 | Verified visually | admin dashboard rendered in Chromium, light + dark + 390px mobile, zero console errors |
-| **Not verified** | the Stripe adapter (no credentials here), push delivery, and **the Expo app's rendered UI** — it typechecks and its logic is tested, but it has not run on a device or simulator |
+| **Not verified** | the Stripe adapter (no credentials here), push delivery, device geocoding, and **the Expo app's rendered UI** — it typechecks and its logic is tested, but it has not run on a device or simulator |
+
+Mobile app surfaces: worker map with all seven filters, job detail, claim,
+earnings, public pro profile, leaderboards, customer home, five-step post flow,
+job tracking with approve/tip/rate/recurring, add property, in-app messaging,
+and the signed-out flow.
 
 The full loop has been executed against a running server, not just unit-tested:
 a customer posts a job, a worker finds it on the map, claims it, the second
@@ -70,13 +76,13 @@ packages/
   client/                 typed API client shared by mobile, web, and admin
 apps/
   admin/                  Next.js operations dashboard
-  mobile/                 Expo app — worker map, job detail, claim flow
+  mobile/                 Expo app — map, post flow, job tracking, messaging, leaderboards
 docs/
 ```
 
 ---
 
-## Two things worth reading the code for
+## Four things worth reading the code for
 
 **The claim** (`apps/api/src/modules/jobs/claim.ts`) — when N workers tap CLAIM on
 the same job at the same instant, exactly one wins. This is done with a single
@@ -95,6 +101,15 @@ boundary is asserted over HTTP as well as at the query layer.
 records intent; `ledger_entries` records effect, as balanced double-entry lines.
 `postEntry` refuses to write anything that does not sum to zero, because a
 lopsided write corrupts the books silently while looking like success.
+
+**Message screening** (`packages/shared/src/domain/messages.ts`) — phone
+numbers, emails, payment handles and "let's do this off the app" are flagged for
+human review and the message is **delivered anyway**. Blocking is wrong twice
+over: the false positives are the most ordinary messages in the product
+("$120.00 for front and back, gate code 4417" — prices and street addresses are
+stripped before the phone check for exactly this reason), and a worker whose
+legitimate message vanishes switches to SMS, which is the leak the block was
+meant to prevent.
 
 Demo credentials after seeding: `customer1@grassassassin.test` /
 `worker1@grassassassin.test`, password `GrassDemo123!`
@@ -115,7 +130,14 @@ pnpm --filter @grassassassin/api db:generate
 
 pnpm --filter @grassassassin/api db:seed     # reference data + a demo marketplace
 
-pnpm -r test        # 303 tests; the API suite needs the database
+# The integration suite TRUNCATES every table, so it runs against its own
+# database and refuses to start against anything not named as a test database.
+# This is deliberate: a destructive suite should not be one typo from a real URL.
+createdb grassassassin_test
+DATABASE_URL=postgresql://user:pass@localhost:5432/grassassassin_test \
+  pnpm --filter @grassassassin/api db:deploy
+
+pnpm -r test        # 687 tests; the API suite needs the test database
 pnpm -r typecheck
 
 pnpm dev:api        # http://localhost:4000 — /health, /v1/categories, /v1/leaderboard
