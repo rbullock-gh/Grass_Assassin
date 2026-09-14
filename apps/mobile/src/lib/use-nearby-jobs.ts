@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LatLng } from '@grassassassin/shared'
 import type { MapJob } from '@grassassassin/client'
 import { api } from './api'
@@ -12,7 +12,20 @@ import { applyFilters, sortJobs, type Filters, type SortKey } from './jobs'
  * chip tap makes the map feel broken. Filters that the server already applied
  * are re-applied locally for the same reason; the server stays authoritative
  * and a refetch reconciles.
+ *
+ * The filter sheet applies live, so a worker adjusting five chips would fire
+ * five searches and use one. Local filtering still updates on every tap — that
+ * is what they see — while the authoritative fetch is debounced behind it.
  */
+
+/**
+ * How long to wait after the last filter change before asking the server.
+ *
+ * Long enough to absorb a run of taps, short enough that a single considered
+ * tap does not feel like it was ignored.
+ */
+export const FILTER_REFETCH_DELAY_MS = 400
+
 export interface NearbyJobsState {
   jobs: MapJob[]
   allJobs: MapJob[]
@@ -43,6 +56,16 @@ export function useNearbyJobs(params: {
   const requestId = useRef(0)
   const hasLoaded = useRef(false)
 
+  // Debounced copy, used only for the request. `filters` itself still drives
+  // the local narrowing on every render, so the list reacts to each tap.
+  const [fetchFilters, setFetchFilters] = useState<Filters>(filters)
+  const filterKey = useMemo(() => JSON.stringify(filters), [filters])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setFetchFilters(JSON.parse(filterKey) as Filters), FILTER_REFETCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [filterKey])
+
   const fetchJobs = useCallback(async (overrideCenter?: LatLng, overrideRadius?: number) => {
     const searchCenter = overrideCenter ?? center
     if (!searchCenter || !enabled) return
@@ -56,12 +79,12 @@ export function useNearbyJobs(params: {
       const result = await api.searchJobs({
         center: searchCenter,
         radiusMiles: overrideRadius ?? radiusMiles,
-        minPayoutCents: filters.minPayoutCents,
-        categoryIds: filters.categoryIds,
-        equipmentProvided: filters.equipmentProvided,
-        difficulty: filters.difficulty,
-        dueToday: filters.dueToday,
-        dueThisWeek: filters.dueThisWeek,
+        minPayoutCents: fetchFilters.minPayoutCents,
+        categoryIds: fetchFilters.categoryIds,
+        equipmentProvided: fetchFilters.equipmentProvided,
+        difficulty: fetchFilters.difficulty,
+        dueToday: fetchFilters.dueToday,
+        dueThisWeek: fetchFilters.dueThisWeek,
         sort,
         limit: 100,
       })
@@ -78,7 +101,7 @@ export function useNearbyJobs(params: {
         setRefreshing(false)
       }
     }
-  }, [center, radiusMiles, filters, sort, enabled])
+  }, [center, radiusMiles, fetchFilters, sort, enabled])
 
   useEffect(() => { void fetchJobs() }, [fetchJobs])
 

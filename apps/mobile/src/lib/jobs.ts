@@ -36,6 +36,99 @@ export function countActiveFilters(filters: Filters): number {
   return count
 }
 
+/**
+ * Preset values offered in the filter sheet.
+ *
+ * Presets, not sliders. A slider on a phone is a precision task done with a
+ * thumb, in the sun, often in a truck — and nobody genuinely wants "$43
+ * minimum". Five taps that cover the real decisions beat one gesture that
+ * covers all of them badly.
+ */
+export const DISTANCE_PRESETS_MILES = [3, 5, 10, 20, 30] as const
+export const MIN_PAYOUT_PRESETS_CENTS = [2000, 3500, 5000, 7500, 10_000] as const
+export const DIFFICULTY_LABELS: Record<'EASY' | 'MODERATE' | 'HARD', string> = {
+  EASY: 'Easy',
+  MODERATE: 'Moderate',
+  HARD: 'Hard',
+}
+
+/**
+ * Toggling a filter off by re-tapping the value that is already set.
+ *
+ * Without this a worker who taps "10 miles" by accident has no way back to
+ * "any distance" except Clear All, which throws away the four filters they
+ * meant to keep.
+ */
+export function toggleFilterValue<K extends keyof Filters>(
+  filters: Filters,
+  key: K,
+  value: NonNullable<Filters[K]>,
+): Filters {
+  const next = { ...filters }
+  if (next[key] === value) delete next[key]
+  else next[key] = value
+  return next
+}
+
+/** Category filters are multi-select, so they toggle within a list. */
+export function toggleCategory(filters: Filters, categoryId: string): Filters {
+  const current = filters.categoryIds ?? []
+  const next = current.includes(categoryId)
+    ? current.filter((id) => id !== categoryId)
+    : [...current, categoryId]
+  const result = { ...filters }
+  if (next.length === 0) delete result.categoryIds
+  else result.categoryIds = next
+  return result
+}
+
+/**
+ * "Today" and "this week" are one question, not two.
+ *
+ * Both set at once is a contradiction the worker cannot see and would read as
+ * a broken filter, so choosing one clears the other.
+ */
+export function setDeadlineFilter(filters: Filters, choice: 'TODAY' | 'THIS_WEEK' | null): Filters {
+  const next = { ...filters }
+  delete next.dueToday
+  delete next.dueThisWeek
+  if (choice === 'TODAY') next.dueToday = true
+  if (choice === 'THIS_WEEK') next.dueThisWeek = true
+  return next
+}
+
+export function deadlineFilterOf(filters: Filters): 'TODAY' | 'THIS_WEEK' | null {
+  if (filters.dueToday) return 'TODAY'
+  if (filters.dueThisWeek) return 'THIS_WEEK'
+  return null
+}
+
+/**
+ * One line describing what is currently filtered.
+ *
+ * Shown on the collapsed control so a worker seeing three jobs where there
+ * were forty knows why, without opening the sheet to find out.
+ */
+export function describeFilters(filters: Filters, categoryNames: Record<string, string> = {}): string {
+  const parts: string[] = []
+  if (filters.maxDistanceMiles !== undefined) parts.push(`within ${filters.maxDistanceMiles} mi`)
+  if (filters.minPayoutCents !== undefined) parts.push(`${displayPayout(filters.minPayoutCents)}+`)
+  if (filters.categoryIds?.length) {
+    const named = filters.categoryIds.map((id) => categoryNames[id]).filter(Boolean) as string[]
+    parts.push(named.length > 0 && named.length === filters.categoryIds.length
+      ? named.join(', ')
+      : `${filters.categoryIds.length} categories`)
+  }
+  if (filters.difficulty !== undefined) parts.push(DIFFICULTY_LABELS[filters.difficulty].toLowerCase())
+  if (filters.equipmentProvided !== undefined) {
+    parts.push(filters.equipmentProvided ? 'gear provided' : 'own gear')
+  }
+  if (filters.dueToday) parts.push('due today')
+  else if (filters.dueThisWeek) parts.push('due this week')
+
+  return parts.length === 0 ? 'All jobs' : parts.join(' · ')
+}
+
 export function applyFilters(jobs: MapJob[], filters: Filters, now = new Date()): MapJob[] {
   const endOfToday = new Date(now)
   endOfToday.setHours(23, 59, 59, 999)

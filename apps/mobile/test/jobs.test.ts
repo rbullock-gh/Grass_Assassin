@@ -3,6 +3,8 @@ import type { MapJob } from '@grassassassin/client'
 import {
   sortJobs, applyFilters, countActiveFilters, markerVariantFor, isUrgent,
   formatDeadline, displayPrice, displayRate, yardSizeLabel, EMPTY_FILTERS,
+  toggleFilterValue, toggleCategory, setDeadlineFilter, deadlineFilterOf, describeFilters,
+  type Filters,
 } from '@/lib/jobs'
 import { layoutFor } from '@/lib/responsive'
 
@@ -221,6 +223,123 @@ describe('responsive layout', () => {
       const columns = layoutFor(width, 900).columns
       expect(columns).toBeGreaterThanOrEqual(previous)
       previous = columns
+    }
+  })
+})
+
+describe('filter controls', () => {
+  it('clears a filter when the value already set is tapped again', () => {
+    // Without this a mis-tap has no way back except Clear All, which throws
+    // away the four filters the worker meant to keep.
+    const set = toggleFilterValue(EMPTY_FILTERS, 'maxDistanceMiles', 10)
+    expect(set.maxDistanceMiles).toBe(10)
+    expect(toggleFilterValue(set, 'maxDistanceMiles', 10).maxDistanceMiles).toBeUndefined()
+  })
+
+  it('switches to a different value rather than clearing', () => {
+    const set = toggleFilterValue(EMPTY_FILTERS, 'maxDistanceMiles', 10)
+    expect(toggleFilterValue(set, 'maxDistanceMiles', 5).maxDistanceMiles).toBe(5)
+  })
+
+  it('removes the key entirely rather than leaving undefined behind', () => {
+    // countActiveFilters checks `!== undefined`, but a lingering key would
+    // still serialise into the query string as an empty value.
+    const cleared = toggleFilterValue(
+      toggleFilterValue(EMPTY_FILTERS, 'difficulty', 'HARD'), 'difficulty', 'HARD')
+    expect('difficulty' in cleared).toBe(false)
+    expect(countActiveFilters(cleared)).toBe(0)
+  })
+
+  it('handles equipmentProvided:false, which is a real filter and not "unset"', () => {
+    // The bug this guards: treating false as absent, so "I bring my own gear"
+    // silently does nothing.
+    const own = toggleFilterValue(EMPTY_FILTERS, 'equipmentProvided', false)
+    expect(own.equipmentProvided).toBe(false)
+    expect(countActiveFilters(own)).toBe(1)
+    expect(toggleFilterValue(own, 'equipmentProvided', false).equipmentProvided).toBeUndefined()
+  })
+
+  it('toggles categories within a list without disturbing the others', () => {
+    let f = toggleCategory(EMPTY_FILTERS, 'mow')
+    f = toggleCategory(f, 'leaves')
+    expect(f.categoryIds).toEqual(['mow', 'leaves'])
+    f = toggleCategory(f, 'mow')
+    expect(f.categoryIds).toEqual(['leaves'])
+  })
+
+  it('drops the category key when the last one is removed', () => {
+    const f = toggleCategory(toggleCategory(EMPTY_FILTERS, 'mow'), 'mow')
+    expect('categoryIds' in f).toBe(false)
+    expect(countActiveFilters(f)).toBe(0)
+  })
+
+  it('never lets both deadline filters be set at once', () => {
+    // Both set is a contradiction the worker cannot see, and reads as a broken
+    // filter that hides everything.
+    let f = setDeadlineFilter(EMPTY_FILTERS, 'TODAY')
+    expect(f.dueToday).toBe(true)
+    f = setDeadlineFilter(f, 'THIS_WEEK')
+    expect(f.dueToday).toBeUndefined()
+    expect(f.dueThisWeek).toBe(true)
+    expect(countActiveFilters(f)).toBe(1)
+  })
+
+  it('round-trips the deadline choice', () => {
+    for (const choice of ['TODAY', 'THIS_WEEK', null] as const) {
+      expect(deadlineFilterOf(setDeadlineFilter(EMPTY_FILTERS, choice))).toBe(choice)
+    }
+  })
+
+  it('leaves other filters alone when the deadline changes', () => {
+    const base = toggleFilterValue(EMPTY_FILTERS, 'minPayoutCents', 5000)
+    expect(setDeadlineFilter(base, 'TODAY').minPayoutCents).toBe(5000)
+  })
+})
+
+describe('filter summary line', () => {
+  const names = { mow: 'Lawn Mowing', leaves: 'Leaf Removal' }
+
+  it('says "All jobs" when nothing is filtered', () => {
+    expect(describeFilters(EMPTY_FILTERS)).toBe('All jobs')
+  })
+
+  it('names the categories when it knows them', () => {
+    expect(describeFilters({ categoryIds: ['mow', 'leaves'] }, names)).toBe('Lawn Mowing, Leaf Removal')
+  })
+
+  it('falls back to a count when a category name has not loaded', () => {
+    // The category list loads asynchronously; the summary must not render
+    // "undefined" in the window before it arrives.
+    const line = describeFilters({ categoryIds: ['mow', 'unknown'] }, names)
+    expect(line).toBe('2 categories')
+    expect(line).not.toContain('undefined')
+  })
+
+  it('distinguishes gear provided from bringing your own', () => {
+    expect(describeFilters({ equipmentProvided: true })).toBe('gear provided')
+    expect(describeFilters({ equipmentProvided: false })).toBe('own gear')
+  })
+
+  it('never renders both deadlines', () => {
+    expect(describeFilters({ dueToday: true, dueThisWeek: true })).toBe('due today')
+  })
+
+  it('reads as one line with everything set', () => {
+    expect(describeFilters({
+      maxDistanceMiles: 10, minPayoutCents: 5000, categoryIds: ['mow'],
+      difficulty: 'HARD', equipmentProvided: true, dueToday: true,
+    }, names)).toBe('within 10 mi · $50.00+ · Lawn Mowing · hard · gear provided · due today')
+  })
+
+  it('agrees with the active-filter count on what counts as set', () => {
+    const cases: Filters[] = [
+      {}, { maxDistanceMiles: 5 }, { equipmentProvided: false },
+      { difficulty: 'EASY', dueThisWeek: true }, { minPayoutCents: 2000, categoryIds: ['mow'] },
+    ]
+    for (const f of cases) {
+      const described = describeFilters(f, names)
+      const parts = described === 'All jobs' ? 0 : described.split(' · ').length
+      expect(parts, JSON.stringify(f)).toBe(countActiveFilters(f))
     }
   })
 })

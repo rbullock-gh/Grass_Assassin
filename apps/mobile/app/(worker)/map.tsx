@@ -7,16 +7,20 @@ import { router } from 'expo-router'
 import * as Location from 'expo-location'
 import type { LatLng } from '@grassassassin/shared'
 import { progressToNextRank, RANKS } from '@grassassassin/shared'
-import type { MapJob } from '@grassassassin/client'
+import type { Category, MapJob } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { useNearbyJobs } from '@/lib/use-nearby-jobs'
-import { EMPTY_FILTERS, SORT_LABELS, countActiveFilters, displayPayout, type Filters, type SortKey } from '@/lib/jobs'
+import {
+  EMPTY_FILTERS, SORT_LABELS, countActiveFilters, describeFilters, displayPayout,
+  type Filters, type SortKey,
+} from '@/lib/jobs'
 import { MapCanvas } from '@/components/MapCanvas'
 import { JobCard } from '@/components/JobCard'
 import { EarningsStrip } from '@/components/EarningsStrip'
+import { FilterSheet } from '@/components/filter-sheet'
 
 /**
  * WORKER HOME — Direction A, "Map First", with B's earnings strip.
@@ -45,6 +49,8 @@ export default function WorkerMapScreen() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [claimingId, setClaimingId] = useState<string | null>(null)
   const [weeklyEarningsCents, setWeeklyEarnings] = useState(0)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
 
   const worker = user?.workerProfile ?? null
   const radiusMiles = worker?.serviceRadiusMiles ?? 15
@@ -121,7 +127,20 @@ export default function WorkerMapScreen() {
     router.push(`/(worker)/job/${jobId}`)
   }, [])
 
+  // Loaded once for the work-type filter. Failure is silent and the filter
+  // simply does not appear: a worker who cannot load a category list still has
+  // a working map, which matters more.
+  useEffect(() => {
+    void api.categories()
+      .then((result) => setCategories(result.categories))
+      .catch(() => undefined)
+  }, [])
+
   const activeFilterCount = countActiveFilters(filters)
+  const categoryNames = useMemo(
+    () => Object.fromEntries(categories.map((category) => [category.id, category.name])),
+    [categories],
+  )
 
   const listHeader = (
     <View style={styles.listHeader}>
@@ -130,17 +149,35 @@ export default function WorkerMapScreen() {
           {loading ? 'Finding jobs…' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} nearby`}
         </Text>
         <Pressable
-          onPress={() => setFilters(EMPTY_FILTERS)}
-          disabled={activeFilterCount === 0}
+          onPress={() => setFiltersOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="Clear all filters"
-          style={styles.clearButton}
+          accessibilityLabel={
+            activeFilterCount > 0
+              ? `Filters, ${activeFilterCount} active: ${describeFilters(filters, categoryNames)}`
+              : 'Filters'
+          }
+          style={[
+            styles.filterButton,
+            {
+              backgroundColor: activeFilterCount > 0 ? c.brandSubtle : c.surface,
+              borderColor: activeFilterCount > 0 ? c.brand : c.border,
+            },
+          ]}
         >
-          <Text style={{ color: activeFilterCount > 0 ? c.brand : c.textTertiary, fontSize: 13, fontWeight: '600' }}>
-            {activeFilterCount > 0 ? `Clear ${activeFilterCount}` : 'No filters'}
+          <Text style={{ color: activeFilterCount > 0 ? c.brand : c.textSecondary, fontSize: 13, fontWeight: '700' }}>
+            {activeFilterCount > 0 ? `Filters · ${activeFilterCount}` : 'Filters'}
           </Text>
         </Pressable>
       </View>
+
+      {activeFilterCount > 0 ? (
+        // Says WHY the list is short without making the worker open the sheet
+        // to find out. A worker who sees three jobs where there were forty and
+        // cannot tell why concludes the app is broken.
+        <Text style={[textStyles.caption, { color: c.textTertiary }]} numberOfLines={1}>
+          {describeFilters(filters, categoryNames)}
+        </Text>
+      ) : null}
 
       <FlatList
         horizontal
@@ -269,6 +306,17 @@ export default function WorkerMapScreen() {
           </View>
         </View>
       )}
+
+      {/* Rendered once, outside both layout branches: a Modal is positioned
+          against the screen, so duplicating it per branch would mount two. */}
+      <FilterSheet
+        visible={filtersOpen}
+        filters={filters}
+        categories={categories}
+        resultCount={jobs.length}
+        onChange={setFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
     </View>
   )
 }
@@ -337,6 +385,10 @@ const styles = StyleSheet.create({
   banner: { paddingHorizontal: space[4], paddingVertical: space[2], minHeight: minTouchTarget, justifyContent: 'center' },
   listHeader: { paddingHorizontal: space[4], paddingBottom: space[2], gap: space[2] },
   listHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  filterButton: {
+    minHeight: 34, borderWidth: 1, borderRadius: radius.full,
+    paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center',
+  },
   clearButton: { minHeight: 32, justifyContent: 'center' },
   chipRow: { gap: space[2], paddingVertical: space[1] },
   chip: { paddingHorizontal: space[3], paddingVertical: 7, borderRadius: radius.full, borderWidth: 1 },
