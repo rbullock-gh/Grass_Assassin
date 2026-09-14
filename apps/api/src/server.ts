@@ -3,6 +3,11 @@ import { prisma } from './lib/prisma.js'
 import { buildServer } from './http/server.js'
 import { StripePaymentProvider } from './modules/payments/stripe-provider.js'
 import { FakePaymentProvider } from './modules/payments/fake-provider.js'
+import { InMemoryQueue } from './modules/queue/queue.js'
+import { BullMqQueue } from './modules/queue/bullmq-queue.js'
+import { registerHandlers, registerSchedules } from './modules/queue/handlers.js'
+import { Notifier, RecordingPushSender } from './modules/notifications/notifier.js'
+import type { Queue } from './modules/queue/queue.js'
 
 /**
  * Process entry point.
@@ -24,6 +29,25 @@ async function main() {
     console.warn('⚠️  No STRIPE_SECRET_KEY — using the in-memory fake payment provider.')
   }
 
+  // Background work. Without Redis the process still serves requests — an API
+  // that refuses to boot over a missing optional dependency is worse than one
+  // that degrades and says so.
+  let queue: Queue
+  if (env.REDIS_URL) {
+    queue = await BullMqQueue.connect(env.REDIS_URL)
+  } else {
+    queue = new InMemoryQueue()
+    if (env.NODE_ENV === 'production') {
+      console.warn('⚠️  No REDIS_URL in production — background jobs will not survive a restart.')
+    } else {
+      console.warn('⚠️  No REDIS_URL — using the in-memory queue. Scheduled work will not run.')
+    }
+  }
+
+  const notifier = new Notifier(prisma, new RecordingPushSender())
+  registerHandlers({ db: prisma, provider, queue, notifier })
+  await registerSchedules(queue)
+
   const app = await buildServer({
     db: prisma,
     provider,
@@ -44,7 +68,10 @@ async function main() {
   // mid-flight and leave a reservation stranded.
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
-      void app.close().then(() => prisma.$disconnect()).then(() => process.exit(0))
+      void app.close()
+        .then(() => queue.close())
+        .then(() => prisma.$disconnect())
+        .then(() => process.exit(0))
     })
   }
 }

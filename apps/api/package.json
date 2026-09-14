@@ -25,6 +25,7 @@
     "@paralleldrive/cuid2": "^3.3.0",
     "@prisma/client": "^6.1.0",
     "argon2": "^0.41.1",
+    "bullmq": "^6.3.6",
     "fastify": "^5.2.0",
     "fastify-plugin": "^5.0.1",
     "jose": "^5.9.6",
