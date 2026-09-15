@@ -88,6 +88,15 @@ jobs:
           NODE_ENV: production
         run: pnpm --filter @grassassassin/mobile exec expo export --platform web --output-dir .expo-web-ci
 
+      # Handed to the render job rather than bundled twice, so what gets
+      # rendered is byte-for-byte what this step produced.
+      - name: Keep the web bundle for the render job
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: apps/mobile/.expo-web-ci
+          retention-days: 1
+
       - name: Create shadow database
         run: |
           PGPASSWORD=grass createdb -h localhost -U grass grassassassin_shadow
@@ -158,3 +167,201 @@ jobs:
       - name: API log
         if: failure()
         run: cat /tmp/api.log
+
+  admin:
+    name: Admin dashboard in a browser
+    runs-on: ubuntu-latest
+    needs: verify
+
+    # The admin dashboard is the one surface that can change platform fees and
+    # settle disputes, and almost everything that protects it is only true in a
+    # browser: whether the middleware is wired to the routes, whether the cookie
+    # carries httpOnly, whether a revoked administrator actually loses access.
+    # Unit tests cannot answer any of those, so CI asks a browser.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: grass
+          POSTGRES_PASSWORD: grass
+          POSTGRES_DB: grassassassin_admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_admin
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
+      ADMIN_SESSION_SECRET: ci-admin-session-secret-at-least-32-chars
+      ADMIN_SERVICE_TOKEN: ci-admin-service-token-at-least-32-chars-x
+      ADMIN_EMAIL: admin@grassassassin.test
+      ADMIN_PASSWORD: ci-admin-password-not-a-real-secret
+      API_BASE_URL: http://localhost:4000
+      ADMIN_BASE_URL: http://localhost:3001
+      PORT: 4000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @grassassassin/api db:generate
+      - run: pnpm --filter @grassassassin/api db:deploy
+      - run: pnpm --filter @grassassassin/api db:seed
+
+      - name: Create the administrator the suites sign in as
+        run: pnpm --filter @grassassassin/api admin:create
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start the API
+        run: |
+          pnpm --filter @grassassassin/api dev > /tmp/api.log 2>&1 &
+          for _ in $(seq 1 40); do
+            curl -sf http://localhost:4000/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/health || { cat /tmp/api.log; exit 1; }
+
+      # Built and served as production, not dev. The secure cookie flag and the
+      # edge middleware only behave like production in a production build.
+      - name: Build and start the admin dashboard
+        run: |
+          pnpm --filter @grassassassin/admin build
+          pnpm --filter @grassassassin/admin start > /tmp/admin.log 2>&1 &
+          for _ in $(seq 1 40); do
+            curl -sf -o /dev/null http://localhost:3001/sign-in && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:3001/sign-in || { cat /tmp/admin.log; exit 1; }
+
+      # The claim is that a missing secret is a fatal misconfiguration rather
+      # than a quiet fallback to open access. Checked on its own instance, on a
+      # different port, before the real one starts.
+      - name: It refuses to run unauthenticated in production
+        run: |
+          env -u ADMIN_SESSION_SECRET \
+            pnpm --filter @grassassassin/admin exec next start -p 3002 > /tmp/noauth.log 2>&1 &
+          sleep 8
+          code=$(curl -s -o /tmp/noauth-body.html -w '%{http_code}' http://localhost:3002/config || true)
+          if [ "$code" != "500" ]; then
+            echo "::error::Expected 500 with no ADMIN_SESSION_SECRET, got $code"
+            cat /tmp/noauth.log
+            exit 1
+          fi
+          if grep -qE 'Fees & config|worker_commission' /tmp/noauth-body.html; then
+            echo "::error::Admin content leaked while unauthenticated."
+            exit 1
+          fi
+          grep -q 'ADMIN_SESSION_SECRET is required' /tmp/noauth.log || {
+            echo "::error::Expected the refusal to say why."; cat /tmp/noauth.log; exit 1;
+          }
+          pkill -f 'next start -p 3002' || true
+          echo "Refused to serve without a session secret, and leaked nothing."
+
+      - name: Nothing is reachable without signing in
+        run: node scripts/admin-auth-check.mjs
+
+      - name: A revoked administrator loses access immediately
+        run: node scripts/admin-revocation-check.mjs
+
+      # Last: it deliberately leaves an address blocked in the server's memory.
+      - name: Guessing the password is throttled, without locking anyone out
+        run: node scripts/admin-bruteforce-check.mjs
+
+      - name: Logs
+        if: failure()
+        run: |
+          echo '--- api ---'; cat /tmp/api.log
+          echo '--- admin ---'; cat /tmp/admin.log
+
+  render:
+    name: Every screen in a real browser
+    runs-on: ubuntu-latest
+    needs: verify
+
+    # Three of the worst defects this project has had were invisible to
+    # typecheck and to the entire unit suite: the app could not bundle at all,
+    # every text style overlapped because a line height was a CSS ratio where
+    # React Native wanted points, and a balance rounded up. All three were
+    # obvious the moment something drew them. Rendering finds what reading
+    # cannot, so it runs here rather than only on somebody's laptop.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: grass
+          POSTGRES_PASSWORD: grass
+          POSTGRES_DB: grassassassin_render
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_render
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
+      PORT: 4000
+      APP_URL: http://localhost:4311
+      API_URL: http://localhost:4000/v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @grassassassin/api db:generate
+      - run: pnpm --filter @grassassassin/api db:deploy
+      - run: pnpm --filter @grassassassin/api db:seed
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Fetch the web bundle built by verify
+        uses: actions/download-artifact@v4
+        with:
+          name: web-bundle
+          path: apps/mobile/.expo-web-ci
+
+      - name: Start the API
+        run: |
+          pnpm --filter @grassassassin/api dev > /tmp/api.log 2>&1 &
+          for _ in $(seq 1 40); do
+            curl -sf http://localhost:4000/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/health || { cat /tmp/api.log; exit 1; }
+
+      - name: Serve the web build
+        run: |
+          node scripts/serve-web.mjs apps/mobile/.expo-web-ci > /tmp/web.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://localhost:4311/ && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:4311/ || { cat /tmp/web.log; exit 1; }
+
+      - name: Render every screen at every size
+        run: node scripts/render-check.mjs
+
+      - name: Logs
+        if: failure()
+        run: |
+          echo '--- api ---'; cat /tmp/api.log
+          echo '--- web ---'; cat /tmp/web.log

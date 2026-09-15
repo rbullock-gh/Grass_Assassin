@@ -21,7 +21,7 @@
  * Exits non-zero if any combination has a console error, a page error,
  * horizontal overflow, an unmatched route, or renders almost nothing.
  */
-import { chromium } from 'playwright'
+import { launchChromium } from './lib/browser.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -99,9 +99,7 @@ async function main() {
     claimed && { name: 'report-problem', path: `/report/${claimed.id}`, as: customer },
   ].filter(Boolean)
 
-  const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
-  })
+  const browser = await launchChromium()
 
   const failures = []
   let checked = 0

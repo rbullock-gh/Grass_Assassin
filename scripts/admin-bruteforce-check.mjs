@@ -1,4 +1,4 @@
-import { chromium } from 'playwright'
+import { launchChromium } from './lib/browser.mjs'
 
 /**
  * Proves the admin sign-in throttle both works and does not backfire.
@@ -25,7 +25,7 @@ const BASE = argOf('--base', process.env.ADMIN_BASE_URL ?? 'http://localhost:300
 let pass = 0, fail = 0
 const check = (ok, l, d = '') => { ok ? (pass++, console.log(`  PASS  ${l}`)) : (fail++, console.log(`  FAIL  ${l}${d ? ` — ${d}` : ''}`)) }
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const browser = await launchChromium()
 
 async function attempt(ctx, password, ip) {
   const page = await ctx.newPage()

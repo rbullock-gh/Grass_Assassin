@@ -1,4 +1,4 @@
-import { chromium } from 'playwright'
+import { launchChromium } from './lib/browser.mjs'
 import { PrismaClient } from '@prisma/client'
 
 /**
@@ -34,7 +34,7 @@ const check = (ok, label, detail = '') => {
 }
 
 const db = new PrismaClient()
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const browser = await launchChromium()
 const ctx = await browser.newContext()
 const page = await ctx.newPage()
 
