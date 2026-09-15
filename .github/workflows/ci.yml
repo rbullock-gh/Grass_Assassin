@@ -69,6 +69,10 @@ jobs:
       - name: Test
         run: pnpm -r test
 
+      # scripts/ is not a workspace package, so `pnpm -r test` walks past it.
+      - name: Test the scripts
+        run: pnpm test:scripts
+
       - name: Bundle the mobile app
         # Typecheck and the unit suite both pass straight over a bundler
         # failure, because neither of them runs the bundler. The app was at one
@@ -87,6 +91,20 @@ jobs:
           # one. Reproduced locally by clearing .expo before exporting.
           NODE_ENV: production
         run: pnpm --filter @grassassassin/mobile exec expo export --platform web --output-dir .expo-web-ci
+
+      # The web bundle is what every visual check here runs against, and it is
+      # NOT the bundle a phone loads. A module that resolves on web and not on
+      # native — or a native-only import pulled in by a new dependency — would
+      # pass everything above and fail the first time somebody scans the QR
+      # code. Both platforms, because they resolve differently.
+      - name: Bundle the app for a real phone
+        env:
+          NODE_ENV: production
+        run: |
+          pnpm --filter @grassassassin/mobile exec expo export \
+            --platform ios --output-dir .expo-ios-ci
+          pnpm --filter @grassassassin/mobile exec expo export \
+            --platform android --output-dir .expo-android-ci
 
       # Handed to the render job rather than bundled twice, so what gets
       # rendered is byte-for-byte what this step produced.

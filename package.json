@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "db:migrate": "pnpm --filter @grassassassin/api db:migrate",
     "db:seed": "pnpm --filter @grassassassin/api db:seed",
-    "dev:api": "pnpm --filter @grassassassin/api dev"
+    "dev:api": "pnpm --filter @grassassassin/api dev",
+    "demo": "node scripts/demo.mjs",
+    "test:scripts": "vitest run scripts"
   },
   "devDependencies": {
     "@prisma/client": "6.19.3",

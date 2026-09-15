@@ -1,0 +1,56 @@
+{
+  "//": [
+    "Build profiles for EAS, which is how this becomes an app you install",
+    "rather than something running inside Expo Go.",
+    "",
+    "Expo Go is the fastest way to see the product and it is not the product:",
+    "it cannot carry a custom bundle identifier, it shares one push",
+    "certificate, and from SDK 53 it no longer delivers remote notifications",
+    "at all. Anything being judged on how it feels on a phone wants `preview`.",
+    "",
+    "None of these have been run — there is no Expo account attached to this",
+    "repository, and a build needs one. They are written to the documented",
+    "schema and are a starting point, not a verified pipeline."
+  ],
+  "cli": {
+    "version": ">= 5.9.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "//": "A dev client: your own binary, still loading JS from Metro. Use this when you need a native module Expo Go does not carry.",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.42:4000"
+      }
+    },
+    "preview": {
+      "//": "The one to hand somebody. A real installable build with the JS baked in: an .apk on Android, and TestFlight or an ad-hoc .ipa on iOS.",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.grassassassin.com"
+      }
+    },
+    "preview:simulator": {
+      "//": "Same as preview but for a Mac simulator, which needs no signing certificate and no device UDIDs.",
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "//": "Store builds. autoIncrement so two submissions never collide on a build number, which the stores reject.",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.grassassassin.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

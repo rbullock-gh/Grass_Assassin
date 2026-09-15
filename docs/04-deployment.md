@@ -195,6 +195,18 @@ and passes all 54 of its auth checks and 64 render combinations. The Dockerfiles
 pieces, but assembling them inside a real build has not happened. CI builds both
 images so the first run will say.
 
+The app has never run on a real handset. Every visual and accessibility check
+in this repository runs against the React Native Web build, which is the same
+components and the same layout engine but not the same runtime. What IS
+verified is that Metro produces a clean iOS and a clean Android bundle — CI
+builds both, so the class of break that only appears on a phone fails there
+rather than in somebody's hand.
+
+The EAS profiles in `apps/mobile/eas.json` have never been run: a build needs
+an Expo account, and an iOS build needs an Apple Developer account. They are
+written to the documented schema and are a starting point, not a pipeline
+anyone has watched succeed.
+
 No Terraform, no Kubernetes manifests, no CDN or WAF configuration. Object
 storage for photos is behind a provider interface with a working fake; the R2
 adapter is written but has never been pointed at a real bucket.

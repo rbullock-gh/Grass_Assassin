@@ -111,10 +111,18 @@ export class GrassAssassinClient {
     if (options.body !== undefined) headers['content-type'] = 'application/json'
     if (accessToken) headers['authorization'] = `Bearer ${accessToken}`
 
+    /*
+     * `body` is omitted, not set to undefined.
+     *
+     * RequestInit types it as `BodyInit | null`, so under
+     * exactOptionalPropertyTypes passing an explicit `undefined` is a type
+     * error — and at runtime, a GET or DELETE carrying a body key is what led
+     * Fastify to reject an empty-bodied DELETE with a 400.
+     */
     const response = await this.fetchImpl(url.toString(), {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     })
 
     if (response.status === 401 && retryOn401) {

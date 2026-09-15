@@ -141,13 +141,51 @@ createdb grassassassin_test
 DATABASE_URL=postgresql://user:pass@localhost:5432/grassassassin_test \
   pnpm --filter @grassassassin/api db:deploy
 
-pnpm -r test        # 1,019 tests; the API suite needs the test database
+pnpm -r test        # 1,019 tests (plus 11 in `pnpm test:scripts`); the API suite needs the test database
 pnpm -r typecheck
 
 pnpm dev:api        # http://localhost:4000 — /health, /v1/categories, /v1/leaderboard
 
 pnpm --filter @grassassassin/mobile start  # Expo — needs a device or simulator
 ```
+
+### On an actual phone
+
+```bash
+docker compose up -d db redis    # or point DATABASE_URL at your own PostGIS
+pnpm demo
+```
+
+`pnpm demo` checks everything first and starts nothing until it all passes —
+Node, pnpm, dependencies, a reachable database, secrets long enough to be
+secrets, a free port — then migrates, seeds, starts the API and prints a QR
+code. Install **Expo Go**, put the phone on the same wifi, and scan it. Sign in
+as `customer1@grassassassin.test` or `worker1@grassassassin.test`, password
+`GrassDemo123!`.
+
+`pnpm demo --check` runs the checks and starts nothing.
+
+The one thing worth understanding: the API has to advertise an address the
+phone can route to. On a phone `localhost` is the phone, so a default
+`PUBLIC_BASE_URL` produces an app that works until you take a photo and then
+fails for a reason nothing on screen explains. The script finds this machine's
+LAN address and passes it through. It refuses addresses a phone cannot reach —
+docker bridges, VPN tunnels, loopback, public and documentation ranges — and
+says so rather than handing over a URL that will time out. Override with
+`pnpm demo --host 192.168.1.42`.
+
+Expo Go is the fastest way to see the product and it is not the product: it
+carries its own bundle identifier, shares one push certificate, and from SDK 53
+does not deliver remote notifications at all. For something installable, there
+are EAS profiles in `apps/mobile/eas.json`:
+
+```bash
+npx eas-cli build --profile preview --platform android   # an .apk you can sideload
+npx eas-cli build --profile preview --platform ios       # TestFlight or ad-hoc
+```
+
+Those need an Expo account and, for iOS, an Apple Developer account. **They have
+never been run** — see *What is not verified* in `docs/04-deployment.md`.
 
 ### The admin dashboard
 
