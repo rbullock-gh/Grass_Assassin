@@ -84,7 +84,14 @@ export interface PayoutParams {
 
 export interface PayoutResult {
   payoutId: string
-  status: 'pending' | 'in_transit' | 'paid' | 'failed'
+  /**
+   * Stripe's own payout states, all of them.
+   *
+   * `canceled` was missing, and an unchecked cast in the Stripe adapter let it
+   * through anyway — where the caller's mapping filed it under "pending" and a
+   * cancelled payout sat waiting for an arrival that was never coming.
+   */
+  status: 'pending' | 'in_transit' | 'paid' | 'failed' | 'canceled'
   arrivalDate?: Date
   failureMessage?: string
 }

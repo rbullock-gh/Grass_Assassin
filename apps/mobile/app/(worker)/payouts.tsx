@@ -10,7 +10,9 @@ import { api } from '@/lib/api'
 import { useColors, space, radius, textStyles } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { displayMoney } from '@/lib/jobs'
-import { payoutStateLabel, whyNotPayable, describeArrival } from '@/lib/payouts'
+import {
+  payoutStateLabel, whyNotPayable, describeArrival, describeRequirements,
+} from '@/lib/payouts'
 
 /**
  * Getting the money out.
@@ -171,9 +173,9 @@ export default function PayoutsScreen() {
                 </Pressable>
               ) : null}
 
-              {status.requirementsDue.length > 0 ? (
+              {describeRequirements(status.requirementsDue).length > 0 ? (
                 <Text style={[textStyles.caption, { color: c.textSecondary, marginTop: space[3] }]}>
-                  Still needed: {status.requirementsDue.join(', ')}
+                  Still needed: {describeRequirements(status.requirementsDue).join(', ')}
                 </Text>
               ) : null}
             </View>

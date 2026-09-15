@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { whyNotPayable, payoutStateLabel, describeArrival } from '../src/lib/payouts'
+import {
+  whyNotPayable, payoutStateLabel, describeArrival, describeRequirements,
+} from '../src/lib/payouts'
 import type { PayoutReadiness } from '@grassassassin/client'
 
 const ready = (over: Partial<PayoutReadiness> = {}): PayoutReadiness => ({
@@ -108,5 +110,34 @@ describe('when the money arrives', () => {
     const text = describeArrival('not-a-date', now)
     expect(text).not.toMatch(/invalid/i)
     expect(text).toMatch(/two business days/i)
+  })
+})
+
+describe('what the provider still needs, in words', () => {
+  it('translates codes a worker cannot act on', () => {
+    expect(describeRequirements(['external_account'])).toEqual(['your bank account'])
+    expect(describeRequirements(['individual.id_number'])).toEqual(['your ID number'])
+  })
+
+  it('collapses the three date-of-birth fields into one thing', () => {
+    expect(describeRequirements([
+      'individual.dob.day', 'individual.dob.month', 'individual.dob.year',
+    ])).toEqual(['your date of birth'])
+  })
+
+  it('drops codes it does not recognise rather than showing them raw', () => {
+    // The screen showed "Still needed: unknown_account", which tells a worker
+    // nothing and reads like the app is broken.
+    expect(describeRequirements(['unknown_account'])).toEqual([])
+    expect(describeRequirements(['some.future.stripe.field'])).toEqual([])
+  })
+
+  it('keeps the ones it knows when mixed with ones it does not', () => {
+    expect(describeRequirements(['external_account', 'unknown_account']))
+      .toEqual(['your bank account'])
+  })
+
+  it('returns nothing for an empty list', () => {
+    expect(describeRequirements([])).toEqual([])
   })
 })

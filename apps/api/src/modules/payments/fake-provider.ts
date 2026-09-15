@@ -46,6 +46,16 @@ export class FakePaymentProvider implements PaymentProvider {
     refundPending?: boolean
     nextChargeFailure?: { code: string; message: string }
     payoutMessage?: string
+    /**
+     * How the fake reports a failed payout.
+     *
+     * Providers disagree about this, so the fake has to be able to be both.
+     * Stripe catches its own errors and RETURNS a failed status; a network-level
+     * failure THROWS. Handling only one of those is how a bug reaches production
+     * with a green suite behind it.
+     */
+    payoutFailureMode?: 'throw' | 'return'
+    payoutCanceled?: boolean
   } = {}
 
   /** Every call made, for asserting on call counts (e.g. "charged exactly once"). */
@@ -92,9 +102,21 @@ export class FakePaymentProvider implements PaymentProvider {
     return method
   }
 
-  /** Test helper: make every payout attempt fail, the way a closed account would. */
-  failPayouts(message: string): void {
+  /**
+   * Test helper: make every payout fail.
+   *
+   * `mode` picks how the failure is reported — 'throw' is a network or SDK
+   * error, 'return' is Stripe's own behaviour of catching a StripeError and
+   * handing back a failed status. Both must leave the worker's money where it was.
+   */
+  failPayouts(message: string, mode: 'throw' | 'return' = 'throw'): void {
     this.failures.payoutMessage = message
+    this.failures.payoutFailureMode = mode
+  }
+
+  /** Test helper: the provider accepts the payout and then cancels it. */
+  cancelPayouts(): void {
+    this.failures.payoutCanceled = true
   }
 
   async charge(params: ChargeParams): Promise<ChargeResult> {
@@ -191,7 +213,19 @@ export class FakePaymentProvider implements PaymentProvider {
 
   async payout(params: PayoutParams): Promise<PayoutResult> {
     this.calls.push({ op: 'payout', key: params.idempotencyKey, amountCents: params.amountCents })
-    if (this.failures.payoutMessage) throw new Error(this.failures.payoutMessage)
+    if (this.failures.payoutMessage) {
+      if ((this.failures.payoutFailureMode ?? 'throw') === 'throw') {
+        throw new Error(this.failures.payoutMessage)
+      }
+      return {
+        payoutId: this.id('po'),
+        status: 'failed',
+        failureMessage: this.failures.payoutMessage,
+      }
+    }
+    if (this.failures.payoutCanceled) {
+      return { payoutId: this.id('po'), status: 'canceled' }
+    }
     return this.cached(params.idempotencyKey, (): PayoutResult => ({
       payoutId: this.id('po'),
       status: params.instant ? 'paid' : 'in_transit',

@@ -33,6 +33,7 @@ export default function RootLayout() {
             <Stack.Screen name="(worker)/map" options={{ headerShown: false }} />
             <Stack.Screen name="(worker)/job/[id]" options={{ title: 'Job details' }} />
             <Stack.Screen name="(worker)/earnings" options={{ title: 'Earnings' }} />
+            <Stack.Screen name="(worker)/payouts" options={{ title: 'Payouts' }} />
             <Stack.Screen name="(worker)/profile/[id]" options={{ title: 'Pro' }} />
             <Stack.Screen name="(worker)/leaderboard" options={{ title: 'Leaderboard' }} />
             {/* No header: setup is a one-way door into the app, and a back
@@ -41,6 +42,7 @@ export default function RootLayout() {
 
             <Stack.Screen name="(customer)/home" options={{ headerShown: false }} />
             <Stack.Screen name="(customer)/post" options={{ title: 'Post a job' }} />
+            <Stack.Screen name="(customer)/payment-methods" options={{ title: 'How you pay' }} />
             <Stack.Screen name="(customer)/jobs/[id]" options={{ title: 'Your job' }} />
             <Stack.Screen name="(customer)/properties/new" options={{ title: 'Add a property' }} />
             <Stack.Screen name="(customer)/report/[id]" options={{ title: 'Report a problem' }} />

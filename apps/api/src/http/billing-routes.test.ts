@@ -431,9 +431,20 @@ describe('taking the money out', () => {
     expect(profile.availableBalanceCents).toBe(0)
   })
 
-  it('puts the balance back when the provider refuses', async () => {
+  it.each([
+    ['by throwing', 'throw' as const],
+    ['by returning a failed status, the way Stripe does', 'return' as const],
+  ])('puts the balance back when the provider refuses %s', async (_label, mode) => {
+    /*
+     * Both spellings, because the two providers disagree.
+     *
+     * The fake threw; Stripe catches its own StripeError and returns a failed
+     * status. Only the throw was handled, so this suite was green while the real
+     * adapter left a worker with the balance decremented, the ledger showing the
+     * money remitted, and nothing actually sent.
+     */
     await readyWorker(7_000)
-    provider.failPayouts('Bank account closed')
+    provider.failPayouts('Bank account closed', mode)
 
     const response = await app.inject({
       method: 'POST', url: '/v1/worker/payouts', headers: auth(workerToken), payload: {},
@@ -450,6 +461,26 @@ describe('taking the money out', () => {
     const payout = await prisma.payout.findFirstOrThrow({ where: { workerProfileId } })
     expect(payout.status).toBe('FAILED')
     expect(payout.failureMessage).toMatch(/bank account closed/i)
+  })
+
+  it('treats a cancelled payout as money that never moved', async () => {
+    // Stripe's payout status includes `canceled`, which an unchecked cast let
+    // through as something the caller filed under "pending" — a worker short
+    // the money, waiting on an arrival that was never coming.
+    await readyWorker(4_000)
+    provider.cancelPayouts()
+
+    const response = await app.inject({
+      method: 'POST', url: '/v1/worker/payouts', headers: auth(workerToken), payload: {},
+    })
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(400)
+    const profile = await prisma.workerProfile.findUniqueOrThrow({
+      where: { id: workerProfileId }, select: { availableBalanceCents: true },
+    })
+    expect(profile.availableBalanceCents).toBe(4_000)
+    expect(await accountBalance(prisma, ACCOUNTS.payoutsOut)).toBe(0)
+    expect((await ledgerIsBalanced(prisma)).balanced).toBe(true)
   })
 
   it('lists what has been withdrawn', async () => {

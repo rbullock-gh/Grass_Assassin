@@ -108,3 +108,40 @@ export function describeArrival(arrivalDate: string | Date | null, now = new Dat
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
+
+/**
+ * Provider requirement codes, in words a person can act on.
+ *
+ * Stripe names these for its own API — `individual.id_number`,
+ * `external_account`, and in our fake `unknown_account`. Rendering those raw
+ * showed a worker "Still needed: unknown_account", which tells them nothing and
+ * reads like a fault in the app. Anything not recognised is dropped rather than
+ * shown as a code: a shorter honest list beats a longer meaningless one.
+ */
+const REQUIREMENT_WORDS: Record<string, string> = {
+  'external_account': 'your bank account',
+  'individual.id_number': 'your ID number',
+  'individual.ssn_last_4': 'the last 4 of your SSN',
+  'individual.verification.document': 'a photo of your ID',
+  'individual.dob.day': 'your date of birth',
+  'individual.dob.month': 'your date of birth',
+  'individual.dob.year': 'your date of birth',
+  'individual.address.line1': 'your address',
+  'individual.address.postal_code': 'your postcode',
+  'individual.first_name': 'your first name',
+  'individual.last_name': 'your last name',
+  'individual.email': 'your email',
+  'individual.phone': 'your phone number',
+  'business_profile.url': 'a website or profile link',
+  'business_profile.mcc': 'what kind of work you do',
+  'tos_acceptance.date': 'accepting the terms',
+  'tos_acceptance.ip': 'accepting the terms',
+}
+
+export function describeRequirements(codes: readonly string[]): string[] {
+  const words = codes
+    .map((code) => REQUIREMENT_WORDS[code])
+    .filter((word): word is string => word !== undefined)
+  // De-duplicated: the three date-of-birth fields are one thing to a person.
+  return [...new Set(words)]
+}

@@ -328,6 +328,36 @@ export async function withdrawEarnings(
     })
   })
 
+  /**
+   * Undoes the reservation when the money did not actually leave.
+   *
+   * Shared by both failure signals on purpose. A provider can report a failed
+   * payout by THROWING or by RETURNING a failed status, and our two providers
+   * happen to have picked one each: the fake throws, Stripe catches its own
+   * StripeError and returns `status: 'failed'`. Handling only the throw meant
+   * the tests passed against the fake while the real adapter left a worker
+   * short — balance decremented, ledger showing the money remitted, and nothing
+   * ever sent. The contract is "the money did not move", however it is spelled.
+   */
+  const unwind = async (message: string) => {
+    await deps.db.$transaction([
+      deps.db.workerProfile.update({
+        where: { id: profile.id },
+        data: { availableBalanceCents: { increment: amountCents } },
+      }),
+      deps.db.payout.update({
+        where: { id: payout.id },
+        data: { status: 'FAILED', failureMessage: message },
+      }),
+    ])
+    await postEntry(deps.db, {
+      lines: [
+        { account: ACCOUNTS.payoutsOut, amountCents: -amountCents, memo: 'Payout failed' },
+        { account: ACCOUNTS.worker(params.userId), amountCents, memo: 'Returned after failed payout' },
+      ],
+    })
+  }
+
   let result
   try {
     result = await deps.provider.payout({
@@ -338,27 +368,17 @@ export async function withdrawEarnings(
       instant: params.instant ?? false,
     })
   } catch (error) {
-    // The money never left. Put the balance back and mark the attempt failed,
-    // rather than leaving a worker short with a PENDING row nothing will resolve.
-    await deps.db.$transaction([
-      deps.db.workerProfile.update({
-        where: { id: profile.id },
-        data: { availableBalanceCents: { increment: amountCents } },
-      }),
-      deps.db.payout.update({
-        where: { id: payout.id },
-        data: {
-          status: 'FAILED',
-          failureMessage: error instanceof Error ? error.message : 'Payout failed',
-        },
-      }),
-    ])
-    await postEntry(deps.db, {
-      lines: [
-        { account: ACCOUNTS.payoutsOut, amountCents: -amountCents, memo: 'Payout failed' },
-        { account: ACCOUNTS.worker(params.userId), amountCents, memo: 'Returned after failed payout' },
-      ],
-    })
+    await unwind(error instanceof Error ? error.message : 'Payout failed')
+    throw new PaymentError(
+      'PAYOUT_FAILED',
+      'That withdrawal did not go through. Your balance is unchanged.',
+    )
+  }
+
+  // A cancelled payout is money that did not move either, so it unwinds the
+  // same way rather than sitting as a row nothing will ever resolve.
+  if (result.status === 'failed' || result.status === 'canceled') {
+    await unwind(result.failureMessage ?? 'The payment provider refused this payout')
     throw new PaymentError(
       'PAYOUT_FAILED',
       'That withdrawal did not go through. Your balance is unchanged.',
@@ -369,11 +389,10 @@ export async function withdrawEarnings(
     where: { id: payout.id },
     data: {
       status: result.status === 'paid' ? 'PAID'
-        : result.status === 'failed' ? 'FAILED'
-          : result.status === 'in_transit' ? 'IN_TRANSIT' : 'PENDING',
+        : result.status === 'in_transit' ? 'IN_TRANSIT' : 'PENDING',
       stripePayoutId: result.payoutId,
       arrivalDate: result.arrivalDate ?? null,
-      failureMessage: result.failureMessage ?? null,
+      failureMessage: null,
     },
     select: { id: true, status: true, arrivalDate: true },
   })
