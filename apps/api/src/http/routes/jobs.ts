@@ -16,6 +16,10 @@ import { attemptClaim, confirmClaimPaid, releaseReservation } from '../../module
 import { transitionJob, cancelJob } from '../../modules/jobs/lifecycle.js'
 import { captureForClaim, settleCancellation, chargeTip } from '../../modules/payments/settlement.js'
 import { resolvePolicy } from '../../modules/payments/fee-config.js'
+import {
+  DISPUTE_REASONS, MIN_DISPUTE_DESCRIPTION, MAX_DISPUTE_DESCRIPTION,
+  DISPUTE_WINDOW_DAYS, canDispute, withinDisputeWindow, isUrgentDispute,
+} from '@grassassassin/shared'
 import { displayableRating, recalculateReputation, recalculateCustomerReputation, awardPoints } from '../../modules/gamification/points.js'
 
 export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps): Promise<void> {
@@ -491,6 +495,104 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
   })
 
   // --- reviews and tips ---------------------------------------------------
+
+  /**
+   * Reports a problem with completed work.
+   *
+   * This writes a Dispute record, which nothing previously did. The job status
+   * machine had a DISPUTED state and the admin dashboard was built around an
+   * evidence package, but a customer reporting a problem only moved the status
+   * — holding their money and the worker's with no case for anyone to answer.
+   *
+   * The transition and the record are written together. A DISPUTED job with no
+   * dispute row is invisible to the people whose job it is to resolve it, and a
+   * dispute row on a job that never moved would be a case about nothing.
+   */
+  app.post<{ Params: { id: string } }>('/jobs/:id/dispute', async (request, reply) => {
+    const identity = requireIdentity(request)
+    const body = z.object({
+      reason: z.enum(DISPUTE_REASONS.map((r) => r.key) as [string, ...string[]]),
+      description: z.string().trim().min(MIN_DISPUTE_DESCRIPTION).max(MAX_DISPUTE_DESCRIPTION),
+    }).parse(request.body)
+
+    const job = await deps.db.job.findUnique({
+      where: { id: request.params.id },
+      select: { id: true, customerId: true, claimedByWorkerId: true, status: true, completedAt: true },
+    })
+    if (!job) throw new NotFoundError('Job')
+    if (job.customerId !== identity.userId) throw new ForbiddenError('That is not your job')
+    if (!job.claimedByWorkerId) {
+      throw new ConflictError('NO_WORKER', 'Nobody has worked on this job yet')
+    }
+
+    // Checked FIRST, before the status rules. Opening a dispute moves the job
+    // to DISPUTED, which is not itself a disputable status — so a customer who
+    // taps report twice would otherwise be told "you can cancel the job
+    // instead", which is both wrong and alarming when what actually happened is
+    // that their report went through.
+    const existing = await deps.db.dispute.findFirst({
+      where: { jobId: job.id, status: { in: ['OPEN', 'UNDER_REVIEW'] } },
+      select: { id: true, createdAt: true },
+    })
+    if (existing) {
+      throw new ConflictError(
+        'ALREADY_OPEN',
+        'You have already reported a problem with this job. A person is reviewing it.',
+      )
+    }
+
+    if (!canDispute(job.status)) {
+      // Before the work is finished the remedy is to cancel, which is cheaper
+      // for everyone than opening a case.
+      throw new ConflictError(
+        'NOT_DISPUTABLE',
+        'You can report a problem once the work is marked finished. Until then you can cancel the job.',
+      )
+    }
+    if (!withinDisputeWindow(job.completedAt)) {
+      throw new ConflictError(
+        'WINDOW_CLOSED',
+        `Problems can be reported within ${DISPUTE_WINDOW_DAYS} days of the work being finished.`,
+      )
+    }
+
+    const dispute = await deps.db.dispute.create({
+      data: {
+        jobId: job.id,
+        openedById: identity.userId,
+        againstId: job.claimedByWorkerId,
+        reason: body.reason,
+        description: body.description,
+        status: 'OPEN',
+      },
+      select: { id: true, reason: true, status: true, createdAt: true },
+    })
+
+    // Only move the job if it is somewhere the machine allows. A dispute
+    // raised after payment is still a real case — the money has moved and an
+    // admin may need to refund — but the job does not travel backwards.
+    if (job.status === 'PENDING_APPROVAL') {
+      await transitionJob(deps, {
+        jobId: job.id,
+        actorUserId: identity.userId,
+        actorType: 'CUSTOMER',
+        to: 'DISPUTED',
+        note: `Customer reported: ${body.reason}`,
+      })
+    }
+
+    return reply.status(201).send({
+      disputeId: dispute.id,
+      reason: dispute.reason,
+      status: dispute.status,
+      urgent: isUrgentDispute(dispute.reason),
+      // Said plainly, because the alternative is a customer who assumes nothing
+      // is happening and calls their bank instead.
+      message: isUrgentDispute(dispute.reason)
+        ? 'Reported. Because this involves damage or safety, a person is being alerted now.'
+        : 'Reported. A person will review this within one business day, and your payment is held until it is resolved.',
+    })
+  })
 
   app.post('/jobs/:id/review', async (request, reply) => {
     const identity = requireIdentity(request)

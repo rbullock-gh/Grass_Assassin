@@ -285,6 +285,16 @@ export class GrassAssassinClient {
     return this.request<CancellationPreview>('POST', `/v1/jobs/${jobId}/cancel`, { body: { reason } })
   }
 
+  /**
+   * Reports a problem with completed work.
+   *
+   * Creates the case AND moves the job, together — a DISPUTED job with no
+   * dispute record is invisible to whoever has to resolve it.
+   */
+  disputeJob(jobId: string, input: { reason: string; description: string }) {
+    return this.request<DisputeOpened>('POST', `/v1/jobs/${jobId}/dispute`, { body: input })
+  }
+
   reviewJob(jobId: string, input: { rating: number; comment?: string; tags?: string[] }) {
     return this.request<unknown>('POST', `/v1/jobs/${jobId}/review`, { body: input })
   }
@@ -534,6 +544,16 @@ export interface SearchJobsInput {
 export type ClaimResponse =
   | { outcome: 'WON'; jobId: string; claimId: string; expiresAt: string; status?: string }
   | { outcome: 'LOST'; jobId: string; reason: string; message: string }
+
+export interface DisputeOpened {
+  disputeId: string
+  reason: string
+  status: string
+  /** Damage and safety go to a person immediately rather than into the queue. */
+  urgent: boolean
+  /** What to show the customer. Written by the server so it stays consistent. */
+  message: string
+}
 
 export interface CancellationPreview {
   customerRefundCents: number; workerCompensationCents: number

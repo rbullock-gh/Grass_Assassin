@@ -73,19 +73,11 @@ export default function CustomerJobScreen() {
 
   const reportProblem = useCallback(() => {
     if (!job) return
-    Alert.alert(
-      'Report a problem',
-      'A person will review this within one business day. Your payment is held until it is resolved — nothing is charged to your pro automatically.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          style: 'destructive',
-          onPress: () => void run(() => api.updateJobStatus(job.id, 'DISPUTED'), 'Could not report'),
-        },
-      ],
-    )
-  }, [job, run])
+    // A screen, not a confirm dialog. What it collects IS the case — before
+    // this, reporting a problem held everyone's money over a complaint nobody
+    // had written down.
+    router.push(`/(customer)/report/${job.id}`)
+  }, [job])
 
   const cancel = useCallback(async () => {
     if (!job) return

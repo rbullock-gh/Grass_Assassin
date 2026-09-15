@@ -96,6 +96,7 @@ async function main() {
     settled && { name: 'job-settled', path: `/jobs/${settled.id}`, as: customer },
     posted && { name: 'job-posted', path: `/jobs/${posted.id}`, as: customer },
     claimed && { name: 'thread', path: `/messages/${claimed.id}`, as: customer },
+    claimed && { name: 'report-problem', path: `/report/${claimed.id}`, as: customer },
   ].filter(Boolean)
 
   const browser = await chromium.launch({
