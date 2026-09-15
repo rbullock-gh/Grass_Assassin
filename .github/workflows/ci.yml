@@ -283,6 +283,15 @@ jobs:
       - name: Every admin page at every width, in both themes
         run: node scripts/admin-render-check.mjs
 
+      # Contrast, tap targets, accessible names, focus rings and hover states,
+      # measured against what is actually painted. This found the admin
+      # rendering its signed-in user's name and the Sign out button as white on
+      # white in light mode — invisible, and invisible to every other check in
+      # this file, including the screenshots above, because the dark theme is
+      # what gets looked at while building.
+      - name: Nothing in the admin is unreadable or too small to hit
+        run: node scripts/a11y-check.mjs --app admin --base http://localhost:3001
+
       - name: Screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -377,6 +386,13 @@ jobs:
 
       - name: Render every screen at every size
         run: node scripts/render-check.mjs
+
+      # A screenshot shows a human that a screen looks wrong. It does not show
+      # that a sort chip is 30px tall, or that a rank name is at 3.30:1 — both
+      # of which shipped, and both of which matter to someone reading a phone
+      # outdoors in work gloves.
+      - name: Nothing in the app is unreadable or too small to hit
+        run: node scripts/a11y-check.mjs --app mobile
 
       - name: Logs
         if: failure()
