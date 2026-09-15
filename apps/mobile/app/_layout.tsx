@@ -59,6 +59,9 @@ export default function RootLayout() {
             <Stack.Screen name="(shared)/report-person/[userId]" options={{ title: 'Report someone' }} />
             <Stack.Screen name="(shared)/settings" options={{ title: 'Settings' }} />
             <Stack.Screen name="(shared)/change-password" options={{ title: 'Change password' }} />
+            {/* Apple 5.1.1(v) and Google Play both require this to be reachable
+                in the app, not by writing to support. */}
+            <Stack.Screen name="(shared)/delete-account" options={{ title: 'Delete account' }} />
 
             {/* One thread per job, reachable from either side. */}
             <Stack.Screen name="(shared)/messages/index" options={{ title: 'Messages' }} />

@@ -259,6 +259,19 @@ export default function SettingsScreen() {
         </Pressable>
 
         <Pressable
+          onPress={() => router.push('/(shared)/delete-account')}
+          accessibilityRole="button"
+          style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }]}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[textStyles.bodyStrong, { color: c.dangerInk }]}>Delete account</Text>
+            <Text style={[textStyles.caption, { color: c.textSecondary }]}>
+              Removes your details. Cannot be undone.
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable
           onPress={confirmSignOut}
           accessibilityRole="button"
           style={({ pressed }) => [

@@ -528,12 +528,37 @@ export class GrassAssassinClient {
     return this.request<void>('POST', '/v1/auth/logout-all')
   }
 
+  /** What stands between this person and deleting their account. */
+  deletionBlockers() {
+    return this.request<{ blockers: DeletionBlocker[] }>('GET', '/v1/auth/delete-account')
+  }
+
+  /**
+   * Deletes the account. Required by both app stores.
+   *
+   * Needs the password, because an account is not something an unattended
+   * phone should be able to destroy.
+   */
+  deleteAccount(password: string) {
+    return this.request<DeletionSummary>('POST', '/v1/auth/delete-account', { body: { password } })
+  }
+
   /** Groups not mentioned are left as they were. */
   setNotificationPreferences(groups: Record<string, boolean>) {
     return this.request<{ groups: Array<{ key: string; enabled: boolean }> }>(
       'PUT', '/v1/notification-preferences', { body: { groups } },
     )
   }
+}
+
+export interface DeletionBlocker {
+  code: string
+  message: string
+}
+
+export interface DeletionSummary {
+  removed: { devices: number; properties: number; blocks: number }
+  kept: { jobs: number; reviews: number }
 }
 
 export interface NotificationGroupState {

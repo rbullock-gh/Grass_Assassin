@@ -60,6 +60,7 @@ const MOBILE_SCREENS = [
   { name: 'settings', path: '/settings', as: 'worker' },
   { name: 'recurring', path: '/recurring', as: 'customer' },
   { name: 'change-password', path: '/change-password', as: 'worker' },
+  { name: 'delete-account', path: '/delete-account', as: 'worker' },
 ]
 
 const ADMIN_PAGES = [

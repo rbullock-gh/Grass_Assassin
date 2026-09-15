@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { prisma, resetDatabase, createCategory, NASHVILLE } from '../../test/factories.js'
+import { prisma, resetDatabase, createCategory, createCustomer, NASHVILLE } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
 import { RANKS } from '@grassassassin/shared'
@@ -278,5 +278,84 @@ describe('every route requires the authentication it should', () => {
       'These routes answered an anonymous caller with something other than 401. ' +
       'Either add requireIdentity, or add them to PUBLIC_BY_DESIGN with a reason.',
     ).toEqual([])
+  })
+})
+
+/** A real access token for a factory-made user. */
+async function tokenFor(userId: string): Promise<string> {
+  const { signAccessToken } = await import('../modules/auth/tokens.js')
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId }, select: { id: true, roles: true },
+  })
+  return signAccessToken({
+    userId: user.id, roles: user.roles,
+    secret: 'test-access-secret-at-least-32-characters-long', ttlSeconds: 900,
+  })
+}
+
+describe('an account state change takes effect at once', () => {
+  /**
+   * A signed token says who somebody WAS when it was issued. It cannot say
+   * whether they have since been banned, suspended or deleted — and this used
+   * to accept it anyway, so every account-state change was soft for the life of
+   * the token: a worker banned over a safety report kept working for fifteen
+   * minutes.
+   *
+   * Found by the account-deletion test asserting the old token stopped working,
+   * and it did not.
+   */
+  it('stops a deleted account with an unexpired token', async () => {
+    const customer = await createCustomer()
+    const token = await tokenFor(customer.id)
+    expect((await app.inject({
+      method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` },
+    })).statusCode).toBe(200)
+
+    await prisma.user.update({ where: { id: customer.id }, data: { deletedAt: new Date() } })
+
+    expect((await app.inject({
+      method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` },
+    })).statusCode).toBe(401)
+  })
+
+  it('stops a suspended account with an unexpired token', async () => {
+    const customer = await createCustomer()
+    const token = await tokenFor(customer.id)
+    await prisma.user.update({
+      where: { id: customer.id },
+      data: { status: 'SUSPENDED', suspendedUntil: new Date(Date.now() + 86_400_000) },
+    })
+
+    expect((await app.inject({
+      method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` },
+    })).statusCode).toBe(401)
+  })
+
+  it('lets somebody back in once a suspension expires', async () => {
+    const customer = await createCustomer()
+    const token = await tokenFor(customer.id)
+    await prisma.user.update({
+      where: { id: customer.id },
+      data: { suspendedUntil: new Date(Date.now() - 1000) },
+    })
+
+    expect((await app.inject({
+      method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` },
+    })).statusCode).toBe(200)
+  })
+
+  it('takes roles from the account rather than the token', async () => {
+    // A role granted after sign-in should work without signing in again, and a
+    // role removed should stop working without waiting for the token to lapse.
+    const customer = await createCustomer()
+    const token = await tokenFor(customer.id)
+    await prisma.user.update({
+      where: { id: customer.id }, data: { roles: ['CUSTOMER', 'WORKER'] },
+    })
+
+    const me = await app.inject({
+      method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` },
+    })
+    expect(me.json().roles).toContain('WORKER')
   })
 })

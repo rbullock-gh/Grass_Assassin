@@ -108,6 +108,7 @@ async function main() {
     { name: 'settings', path: '/settings', as: worker },
     { name: 'recurring', path: '/recurring', as: customer },
     { name: 'change-password', path: '/change-password', as: worker },
+    { name: 'delete-account', path: '/delete-account', as: worker },
   ].filter(Boolean)
 
   const browser = await launchChromium()

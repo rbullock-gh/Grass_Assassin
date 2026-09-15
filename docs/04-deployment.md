@@ -163,7 +163,22 @@ uniform shift. The number worth watching in production is the gap between p95
 and p99, not the absolute figures, which are a property of this machine.
 
 The claim path does not degrade at all: it stays under 50ms at every level, and
-exactly one worker wins every time. That is the conditional
+exactly one worker wins every time.
+
+Those figures predate a deliberate change: every authenticated request now
+re-reads the account row, so that a ban, a suspension or a deletion takes effect
+at once rather than lasting out the access token's fifteen minutes. That is one
+primary-key lookup per authenticated request, and it is not free — a later run
+on a busier machine measured search p95 at 143ms (25 concurrent) and 358ms
+(100), against 65ms and 163ms before. The two runs are not a clean comparison,
+because the second shared the box with more processes, but the direction is real
+and the cause is understood.
+
+The tempting optimisation is a short-lived cache of account state. It would
+remove nearly all of those lookups and reintroduce, in miniature, exactly the
+window that was just closed — a banned worker keeps working for the cache's TTL.
+If it is ever added, the TTL is the security property and belongs in this
+document, not buried in the code. That is the conditional
 `UPDATE … WHERE status = 'POSTED'` doing its job — the losers are refused by the
 database in one statement rather than queueing behind a lock.
 

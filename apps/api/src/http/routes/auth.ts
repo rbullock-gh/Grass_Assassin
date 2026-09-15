@@ -6,6 +6,7 @@ import { register, login, changePassword, addRole } from '../../modules/auth/ser
 import { rotateSession, revokeSession, revokeAllSessions } from '../../modules/auth/tokens.js'
 import { hashIp } from '../../modules/auth/password.js'
 import { requireIdentity } from '../context.js'
+import { deleteAccount, deletionBlockers } from '../../modules/auth/deletion.js'
 
 export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps): Promise<void> {
   const authConfig = {
@@ -73,6 +74,35 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps)
 
     await changePassword(deps.db, { userId: identity.userId, ...body })
     return reply.status(204).send()
+  })
+
+  /**
+   * What stands between this person and deleting their account.
+   *
+   * Separate from the delete itself so the confirmation screen can show every
+   * blocker at once. Finding out about three of them one refusal at a time is
+   * its own small cruelty.
+   */
+  app.get('/auth/delete-account', async (request) => {
+    const identity = requireIdentity(request)
+    return { blockers: await deletionBlockers(deps.db, identity.userId) }
+  })
+
+  /**
+   * Deleting an account. Required by both app stores.
+   *
+   * The password is required: an account is not something an unattended phone
+   * should be able to destroy, and a confirm dialog is no barrier to somebody
+   * who has already picked the thing up.
+   */
+  app.post('/auth/delete-account', {
+    config: app.rateLimits.enabled
+      ? { rateLimit: { max: 5, timeWindow: '15 minutes' } }
+      : {},
+  }, async (request) => {
+    const identity = requireIdentity(request)
+    const body = z.object({ password: z.string().min(1) }).parse(request.body)
+    return deleteAccount(deps.db, { userId: identity.userId, password: body.password })
   })
 
   app.post('/auth/add-role', async (request) => {

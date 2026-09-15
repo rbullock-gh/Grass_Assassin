@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { prisma, resetDatabase } from '../../test/factories.js'
+import { prisma, resetDatabase, createCustomer } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
 import { signAccessToken, verifyAccessToken } from '../modules/auth/tokens.js'
@@ -19,6 +19,12 @@ import rateLimit from '@fastify/rate-limit'
  * keyGenerator is called, which depends on plugin registration order. This
  * test pins the behaviour so a reordering cannot silently revert it to
  * IP-only keying.
+ *
+ * The callers are REAL accounts, not just signed tokens for invented ids.
+ * They have to be: the auth hook reads the account on every request so that a
+ * deleted or suspended user loses access immediately rather than at token
+ * expiry. A token for an id with no row behind it is anonymous now, which
+ * would quietly turn this into the IP-keyed test it exists to rule out.
  */
 
 const SECRET = 'test-access-secret-at-least-32-characters-long'
@@ -49,10 +55,16 @@ async function tokenFor(userId: string) {
   return signAccessToken({ userId, roles: ['CUSTOMER'], secret: SECRET, ttlSeconds: 900 })
 }
 
+/** A real account plus a token for it, which is the only kind the hook honours. */
+async function realCaller() {
+  const user = await createCustomer()
+  return { id: user.id, token: await tokenFor(user.id) }
+}
+
 describe('rate limiting keys on the user, not only the IP', () => {
   it('does not let one busy user exhaust another user\'s budget from the same IP', async () => {
-    const alice = await tokenFor('user-alice')
-    const bob = await tokenFor('user-bob')
+    const alice = (await realCaller()).token
+    const bob = (await realCaller()).token
 
     // Alice burns through the global budget. Both requests come from the same
     // simulated IP, as they would behind one NAT.

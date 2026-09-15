@@ -190,13 +190,43 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     const header = request.headers.authorization
     if (!header?.startsWith('Bearer ')) return
     const token = header.slice(7)
+
+    let claims
     try {
-      const claims = await verifyAccessToken(token, deps.config.accessSecret)
-      request.identity = { userId: claims.sub, roles: claims.roles }
+      claims = await verifyAccessToken(token, deps.config.accessSecret)
     } catch {
       // A bad token is treated as no token. Routes that require identity will
       // reject with 401; routes that do not are unaffected.
+      return
     }
+
+    /*
+     * The account is re-read on every request, not trusted from the token.
+     *
+     * A signed JWT says who somebody WAS when it was issued. It cannot say
+     * whether they have since been banned, suspended, or deleted — and this
+     * used to accept it anyway, so every account-state change was soft for the
+     * life of the token. A worker banned for a safety report kept working for
+     * fifteen minutes. Somebody who had just deleted their account could still
+     * read everything, which was how this was found: the deletion test asserted
+     * the old token stopped working, and it did not.
+     *
+     * The cost is one primary-key lookup per authenticated request. The
+     * alternative — shortening the token's life until the window is tolerable —
+     * trades the same latency for more refresh traffic and still leaves a
+     * window. Roles come from the row too, so a role granted or removed takes
+     * effect at once rather than at the next sign-in.
+     */
+    const user = await deps.db.user.findUnique({
+      where: { id: claims.sub },
+      select: { id: true, roles: true, status: true, deletedAt: true, suspendedUntil: true },
+    })
+
+    if (!user || user.deletedAt !== null) return
+    if (user.status !== 'ACTIVE') return
+    if (user.suspendedUntil !== null && user.suspendedUntil > new Date()) return
+
+    request.identity = { userId: user.id, roles: user.roles }
   })
 
   // --- error handling -----------------------------------------------------

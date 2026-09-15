@@ -6,8 +6,10 @@
  * concurrent conditional UPDATEs — exists only in the database, so a mock would
  * prove nothing at all.
  */
+import { resolveTestDatabaseUrl } from './database-url.js'
+
 process.env.NODE_ENV ??= 'test'
-process.env.DATABASE_URL ??= 'postgresql://grass:grass@localhost:5432/grassassassin_test'
+const databaseUrl = resolveTestDatabaseUrl()
 process.env.JWT_ACCESS_SECRET ??= 'test-access-secret-at-least-32-characters-long'
 process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-at-least-32-characters-long'
 
@@ -26,7 +28,7 @@ process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-at-least-32-characters-l
  */
 const TEST_DATABASE_PATTERN = /(^|[_-])test(_|$)|_test$/i
 
-const url = new URL(process.env.DATABASE_URL)
+const url = new URL(databaseUrl)
 const databaseName = decodeURIComponent(url.pathname.replace(/^\//, ''))
 
 if (!TEST_DATABASE_PATTERN.test(databaseName)) {
