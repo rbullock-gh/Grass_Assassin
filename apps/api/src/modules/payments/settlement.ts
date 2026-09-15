@@ -1,6 +1,6 @@
 import type { Db } from '../../lib/prisma.js'
-import { PaymentError, NotFoundError, ConflictError } from '../../lib/errors.js'
-import { postEntry, ACCOUNTS } from './ledger.js'
+import { PaymentError, NotFoundError, ConflictError, ValidationError } from '../../lib/errors.js'
+import { postEntry, ACCOUNTS, type LedgerLine } from './ledger.js'
 import type { PaymentProvider } from './provider.js'
 import { resolvePolicy } from './fee-config.js'
 import { resolveCancellation, quoteJob, type JobQuote } from '@grassassassin/shared'
@@ -526,4 +526,198 @@ export async function chargeTip(deps: SettlementDeps, params: {
   })
 
   return { ok: true, tipId: tip.id }
+}
+
+// ---------------------------------------------------------------------------
+// Dispute resolution
+// ---------------------------------------------------------------------------
+
+export type DisputeDecision = 'WORKER' | 'CUSTOMER' | 'SPLIT'
+
+export interface DisputeResolution {
+  disputeId: string
+  decision: DisputeDecision
+  customerRefundCents: number
+  workerPaidCents: number
+  platformRetainedCents: number
+}
+
+/**
+ * Settles a dispute a person has decided.
+ *
+ * Deliberately takes a decision rather than making one. Every automated path
+ * here would be wrong in the case that matters: a customer who is lying costs a
+ * worker a day's income, and a worker who did nothing keeps money that was not
+ * earned. Both are judgements about what happened on somebody's property, and
+ * neither is available to a function.
+ *
+ * What this does own is that the money adds up. The three outcomes have to sum
+ * to exactly what the customer paid, and postEntry refuses anything that does
+ * not net to zero — so a resolution that would quietly create or destroy money
+ * fails loudly instead of succeeding quietly.
+ */
+export async function resolveDispute(deps: SettlementDeps, params: {
+  disputeId: string
+  decision: DisputeDecision
+  /** Required for SPLIT, ignored otherwise. */
+  refundCents?: number
+  /** What the admin decided and why. Recorded on the dispute. */
+  resolution: string
+  resolvedById: string
+}): Promise<DisputeResolution> {
+  const { db, provider } = deps
+
+  const dispute = await db.dispute.findUnique({
+    where: { id: params.disputeId },
+    select: {
+      id: true, jobId: true, status: true, openedById: true, againstId: true,
+      job: {
+        select: {
+          id: true, status: true, customerId: true, claimedByWorkerId: true,
+          priceCents: true, serviceFeeCents: true, customerTotalCents: true,
+          workerCommissionCents: true, workerPayoutCents: true,
+          transactions: {
+            where: { kind: 'CHARGE', status: 'SUCCEEDED' },
+            select: { id: true, stripePaymentIntentId: true },
+          },
+        },
+      },
+    },
+  })
+  if (!dispute) throw new NotFoundError('Dispute')
+  if (dispute.status !== 'OPEN' && dispute.status !== 'UNDER_REVIEW') {
+    throw new ConflictError('ALREADY_RESOLVED', 'This dispute has already been decided')
+  }
+
+  const job = dispute.job
+  const total = job.customerTotalCents
+
+  // What each decision means in money. SPLIT is the only one that needs a
+  // number from the admin, and it is bounded here rather than trusted.
+  let customerRefundCents: number
+  if (params.decision === 'CUSTOMER') customerRefundCents = total
+  else if (params.decision === 'WORKER') customerRefundCents = 0
+  else {
+    const requested = params.refundCents ?? 0
+    if (!Number.isInteger(requested) || requested <= 0 || requested >= total) {
+      throw new ValidationError(
+        `A split refund must be between 1 and ${total - 1} cents. Use a full decision otherwise.`,
+      )
+    }
+    customerRefundCents = requested
+  }
+
+  // The worker is paid out of what is left, after the platform's cut on the
+  // portion that stands. A worker found at fault for half the job is paid for
+  // half of it, not half of the gross.
+  const standingPortion = total - customerRefundCents
+  const workerPaidCents = params.decision === 'CUSTOMER'
+    ? 0
+    : Math.min(
+        job.workerPayoutCents,
+        Math.round(job.workerPayoutCents * (standingPortion / total)),
+      )
+  const platformRetainedCents = standingPortion - workerPaidCents
+
+  const charge = job.transactions[0]
+
+  await db.$transaction(async (tx) => {
+    if (customerRefundCents > 0 && charge?.stripePaymentIntentId) {
+      const key = idempotencyKey(job.id, `dispute-refund-${dispute.id}`)
+      const refund = await provider.refund({
+        paymentIntentId: charge.stripePaymentIntentId,
+        amountCents: customerRefundCents,
+        idempotencyKey: key,
+        reason: 'requested_by_customer',
+      })
+      await tx.transaction.create({
+        data: {
+          jobId: job.id,
+          kind: customerRefundCents === total ? 'REFUND' : 'PARTIAL_REFUND',
+          status: refund.status === 'succeeded' ? 'SUCCEEDED' : refund.status === 'pending' ? 'PENDING' : 'FAILED',
+          amountCents: customerRefundCents,
+          stripeRefundId: refund.refundId,
+          idempotencyKey: key,
+        },
+      })
+    }
+
+    // Unwind escrow and the fee, then redistribute. Assembled so the lines net
+    // to zero whichever way the decision went.
+    const lines: LedgerLine[] = [
+      { account: ACCOUNTS.escrow, amountCents: -job.priceCents, memo: 'Dispute unwind' },
+      { account: ACCOUNTS.platformRevenue, amountCents: -job.serviceFeeCents, memo: 'Service fee reversed' },
+    ]
+    if (customerRefundCents > 0) {
+      lines.push({
+        account: ACCOUNTS.customer(job.customerId),
+        amountCents: customerRefundCents,
+        memo: `Dispute resolved: refund (${params.decision.toLowerCase()})`,
+      })
+    }
+    if (workerPaidCents > 0 && job.claimedByWorkerId) {
+      lines.push({
+        account: ACCOUNTS.worker(job.claimedByWorkerId),
+        amountCents: workerPaidCents,
+        memo: `Dispute resolved: payout (${params.decision.toLowerCase()})`,
+      })
+    }
+    if (platformRetainedCents !== 0) {
+      lines.push({
+        account: ACCOUNTS.platformRevenue,
+        amountCents: platformRetainedCents,
+        memo: 'Retained after dispute',
+      })
+    }
+
+    await postEntry(tx, { jobId: job.id, lines })
+
+    if (workerPaidCents > 0 && job.claimedByWorkerId) {
+      await tx.workerProfile.updateMany({
+        where: { userId: job.claimedByWorkerId },
+        data: {
+          availableBalanceCents: { increment: workerPaidCents },
+          lifetimeEarningsCents: { increment: workerPaidCents },
+        },
+      })
+    }
+
+    await tx.dispute.update({
+      where: { id: dispute.id },
+      data: {
+        status: params.decision === 'CUSTOMER'
+          ? 'RESOLVED_CUSTOMER'
+          : params.decision === 'WORKER' ? 'RESOLVED_WORKER' : 'RESOLVED_SPLIT',
+        refundCents: customerRefundCents > 0 ? customerRefundCents : null,
+        resolution: params.resolution,
+        resolvedById: params.resolvedById,
+        resolvedAt: new Date(),
+      },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        actorId: params.resolvedById,
+        actorType: 'ADMIN',
+        action: 'dispute.resolved',
+        entityType: 'Dispute',
+        entityId: dispute.id,
+        after: {
+          decision: params.decision,
+          customerRefundCents,
+          workerPaidCents,
+          platformRetainedCents,
+          resolution: params.resolution,
+        },
+      },
+    })
+  })
+
+  return {
+    disputeId: dispute.id,
+    decision: params.decision,
+    customerRefundCents,
+    workerPaidCents,
+    platformRetainedCents,
+  }
 }
