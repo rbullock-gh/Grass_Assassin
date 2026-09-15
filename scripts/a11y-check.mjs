@@ -59,6 +59,7 @@ const MOBILE_SCREENS = [
   { name: 'report-person', path: '/report-person/someone?name=Riley', as: 'customer' },
   { name: 'settings', path: '/settings', as: 'worker' },
   { name: 'recurring', path: '/recurring', as: 'customer' },
+  { name: 'change-password', path: '/change-password', as: 'worker' },
 ]
 
 const ADMIN_PAGES = [
@@ -290,7 +291,18 @@ const FOCUS_AUDIT = () => {
   const targets = [...document.querySelectorAll('button, a[href], input, select, textarea')]
     .filter((el) => {
       const box = el.getBoundingClientRect()
-      return box.width > 0 && box.height > 0
+      if (box.width === 0 || box.height === 0) return false
+      /*
+       * Only things a keyboard can actually reach.
+       *
+       * el.focus() works on tabindex="-1", so focusing everything and looking
+       * for a ring flagged a DISABLED submit button — tabindex -1,
+       * aria-disabled true — that no keyboard user can ever land on. A focus
+       * ring on an unreachable control is not a fix, it is a change made to
+       * satisfy a bad check. Tab order is the real question, so ask it.
+       */
+      if (el.tabIndex < 0) return false
+      return true
     })
     .slice(0, 12)
 

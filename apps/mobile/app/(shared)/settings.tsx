@@ -89,6 +89,29 @@ export default function SettingsScreen() {
     )
   }, [])
 
+  const confirmSignOutEverywhere = useCallback(() => {
+    showAlert(
+      'Sign out everywhere?',
+      'Every device signed in as you is signed out, including this one. Use this if a '
+      + 'phone was lost or you signed in somewhere you should not have.',
+      [
+        { text: 'Never mind', style: 'cancel' },
+        {
+          text: 'Sign out everywhere',
+          style: 'destructive',
+          onPress: () => {
+            void api.logoutEverywhere()
+              .catch(() => undefined)
+              // Local sign-out regardless: the server has revoked the tokens, so
+              // staying "signed in" here would just fail at the next request.
+              .then(() => signOut())
+              .then(() => router.replace('/(auth)/welcome'))
+          },
+        },
+      ],
+    )
+  }, [signOut])
+
   const confirmSignOut = useCallback(() => {
     showAlert(
       'Sign out?',
@@ -207,6 +230,34 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="ACCOUNT">
+        <Pressable
+          onPress={() => router.push('/(shared)/change-password')}
+          accessibilityRole="button"
+          style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }]}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[textStyles.bodyStrong, { color: c.textPrimary }]}>Change password</Text>
+            <Text style={[textStyles.caption, { color: c.textSecondary }]}>
+              Signs out every device, including this one.
+            </Text>
+          </View>
+        </Pressable>
+
+        {/* For a phone left in a truck, or a shared computer. Distinct from
+            signing out here, which only affects this device. */}
+        <Pressable
+          onPress={confirmSignOutEverywhere}
+          accessibilityRole="button"
+          style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }]}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[textStyles.bodyStrong, { color: c.textPrimary }]}>Sign out everywhere</Text>
+            <Text style={[textStyles.caption, { color: c.textSecondary }]}>
+              Ends every session on every device.
+            </Text>
+          </View>
+        </Pressable>
+
         <Pressable
           onPress={confirmSignOut}
           accessibilityRole="button"

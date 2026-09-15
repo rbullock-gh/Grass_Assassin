@@ -508,6 +508,26 @@ export class GrassAssassinClient {
     return this.request<{ groups: NotificationGroupState[] }>('GET', '/v1/notification-preferences')
   }
 
+  // --- account -------------------------------------------------------------
+
+  /**
+   * Changes the password, which signs every session out — including this one.
+   *
+   * The server revokes all refresh tokens on success, so the caller should
+   * clear its own and send the person to sign in rather than waiting to
+   * discover it on the next 401.
+   */
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.request<void>('POST', '/v1/auth/change-password', {
+      body: { currentPassword, newPassword },
+    })
+  }
+
+  /** Signs out everywhere, including here. For a phone left somewhere. */
+  logoutEverywhere() {
+    return this.request<void>('POST', '/v1/auth/logout-all')
+  }
+
   /** Groups not mentioned are left as they were. */
   setNotificationPreferences(groups: Record<string, boolean>) {
     return this.request<{ groups: Array<{ key: string; enabled: boolean }> }>(
