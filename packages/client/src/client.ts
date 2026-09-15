@@ -707,7 +707,20 @@ export interface Earnings {
 }
 
 export interface Leaderboard {
-  scope: string; period: string
+  /** The scope actually served. Not always the one asked for — see fellBackFrom. */
+  scope: string
+  period: string
+  /** The calendar period these standings cover, so a client can name the week. */
+  periodStart: string
+  periodEnd: string
+  /** When the standings were computed, or null when computed for this request. */
+  computedAt: string | null
+  /**
+   * Present when "Near me" could not be answered — no signed-in worker, or no
+   * home base set — and the city board was served instead. The screen says so
+   * rather than passing one board off as the other.
+   */
+  fellBackFrom?: string
   entries: Array<{
     rank: number; workerId: string; firstName: string; avatarUrl: string | null
     rankName: string | null; points: number; jobsCompleted: number

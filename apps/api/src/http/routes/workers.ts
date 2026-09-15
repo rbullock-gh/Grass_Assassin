@@ -7,6 +7,7 @@ import { requireIdentity } from '../context.js'
 import { NotFoundError } from '../../lib/errors.js'
 import { setWorkerBaseLocation } from '../../modules/geo/job-search.js'
 import { displayableRating } from '../../modules/gamification/points.js'
+import { readLeaderboard } from '../../modules/gamification/leaderboard.js'
 
 export async function registerWorkerRoutes(app: FastifyInstance, deps: ServerDeps): Promise<void> {
 
@@ -159,6 +160,10 @@ export async function registerWorkerRoutes(app: FastifyInstance, deps: ServerDep
    * The ROOKIE scope exists so newcomers compete with peers rather than losing
    * to someone with 1,200 jobs — a board you cannot place on is a board you
    * stop opening.
+   *
+   * The reading lives in modules/gamification/leaderboard.ts: which board to
+   * serve, and from the snapshot or live, is a decision worth testing on its
+   * own. This route parses and hands over.
    */
   app.get('/leaderboard', async (request) => {
     const query = z.object({
@@ -167,50 +172,8 @@ export async function registerWorkerRoutes(app: FastifyInstance, deps: ServerDep
       limit: z.coerce.number().int().min(1).max(100).default(25),
     }).parse(request.query)
 
-    const since = query.period === 'WEEKLY'
-      ? new Date(Date.now() - 7 * 86_400_000)
-      : query.period === 'MONTHLY'
-        ? new Date(Date.now() - 30 * 86_400_000)
-        : new Date(0)
-
-    const rows = await deps.db.$queryRaw<Array<{
-      workerProfileId: string; userId: string; firstName: string; avatarUrl: string | null
-      rankName: string | null; points: bigint; jobsCompleted: bigint
-    }>>(Prisma.sql`
-      SELECT w."id" AS "workerProfileId", w."userId", u."firstName", u."avatarUrl",
-             r."name" AS "rankName",
-             COALESCE(SUM(GREATEST(pt."points", 0)), 0)::bigint AS points,
-             -- Lifetime completions from the profile, which recalculateReputation
-             -- derives from primary data. Counting distinct jobIds in the point
-             -- ledger would undercount any award recorded without a job link.
-             w."completedJobs"::bigint AS "jobsCompleted"
-        FROM "worker_profiles" w
-        JOIN "users" u ON u."id" = w."userId"
-        LEFT JOIN "ranks" r ON r."id" = w."rankId"
-        LEFT JOIN "point_transactions" pt
-               ON pt."workerProfileId" = w."id" AND pt."createdAt" >= ${since}
-       WHERE w."status" = 'APPROVED'::"WorkerStatus"
-         AND u."status" = 'ACTIVE'::"AccountStatus"
-         ${query.scope === 'ROOKIE' ? Prisma.sql`AND w."completedJobs" < 20` : Prisma.empty}
-       GROUP BY w."id", w."userId", u."firstName", u."avatarUrl", r."name", w."completedJobs"
-       HAVING COALESCE(SUM(GREATEST(pt."points", 0)), 0) > 0
-       ORDER BY points DESC, "jobsCompleted" DESC
-       LIMIT ${query.limit}
-    `)
-
-    return {
-      scope: query.scope,
-      period: query.period,
-      entries: rows.map((row, index) => ({
-        rank: index + 1,
-        workerId: row.workerProfileId,
-        firstName: row.firstName,
-        avatarUrl: row.avatarUrl,
-        rankName: row.rankName,
-        points: Number(row.points),
-        jobsCompleted: Number(row.jobsCompleted),
-      })),
-    }
+    // Public by design, so there may be no identity. Only LOCAL needs one.
+    return readLeaderboard(deps.db, { ...query, userId: request.identity?.userId })
   })
 
   app.get('/equipment', async () => {

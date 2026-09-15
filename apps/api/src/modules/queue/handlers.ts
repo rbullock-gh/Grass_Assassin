@@ -9,6 +9,7 @@ import { autoApproveStaleJobs, expireUnclaimedJobs } from '../jobs/lifecycle.js'
 import { refreshPremiumFlags, createJob } from '../jobs/repository.js'
 import { findWorkersToNotify } from '../geo/job-search.js'
 import { recalculateReputation } from '../gamification/points.js'
+import { ROOKIE_MAX_COMPLETED_JOBS } from '../gamification/leaderboard.js'
 import { resolvePolicy } from '../payments/fee-config.js'
 import { metersToMiles, periodBoundsFor } from '@grassassassin/shared'
 
@@ -287,6 +288,12 @@ export async function onRecomputeLeaderboards(deps: AutomationDeps): Promise<num
 
   for (const { period, start, end } of periods) {
     const since = start
+    /*
+     * CITY and ROOKIE only. LOCAL is deliberately not snapshotted: "near me" is
+     * a different board for every caller, so precomputing it would mean one
+     * board per worker. The read path computes it per request instead — see
+     * modules/gamification/leaderboard.ts.
+     */
     for (const scope of ['CITY', 'ROOKIE'] as const) {
       const rows = await db.$queryRaw<Array<{ workerProfileId: string; points: bigint; jobsCompleted: number }>>(Prisma.sql`
         SELECT w."id" AS "workerProfileId",
@@ -298,7 +305,7 @@ export async function onRecomputeLeaderboards(deps: AutomationDeps): Promise<num
                  ON pt."workerProfileId" = w."id" AND pt."createdAt" >= ${since}
          WHERE w."status" = 'APPROVED'::"WorkerStatus"
            AND u."status" = 'ACTIVE'::"AccountStatus"
-           ${scope === 'ROOKIE' ? Prisma.sql`AND w."completedJobs" < 20` : Prisma.empty}
+           ${scope === 'ROOKIE' ? Prisma.sql`AND w."completedJobs" < ${ROOKIE_MAX_COMPLETED_JOBS}` : Prisma.empty}
          GROUP BY w."id", w."completedJobs"
         HAVING COALESCE(SUM(GREATEST(pt."points", 0)), 0) > 0
          ORDER BY points DESC

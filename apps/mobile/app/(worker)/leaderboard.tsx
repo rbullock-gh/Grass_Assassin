@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useColors, useIsDark, space, radius, textStyles, minTouchTarget, rankVisuals } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
+import { describePeriod, describeFreshness, describeFallback } from '@/lib/leaderboard'
 
 /**
  * Leaderboards.
@@ -87,6 +88,30 @@ export default function LeaderboardScreen() {
         <Text style={[textStyles.caption, { color: c.textSecondary }]}>
           Your first 90 days. Everyone here started this month too.
         </Text>
+      ) : null}
+
+      {/* Which week, and how old the numbers are. A worker who just finished a
+          job and does not see their points move assumes we lost them. */}
+      {board ? (
+        <View style={styles.boardMeta}>
+          {describePeriod(board) ? (
+            <Text style={[textStyles.caption, { color: c.textSecondary }]}>
+              {describePeriod(board)}
+            </Text>
+          ) : null}
+          <Text style={[textStyles.caption, { color: c.textTertiary }]}>
+            {describeFreshness(board.computedAt)}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* "Near me" that is not near anybody used to be served silently. */}
+      {board && describeFallback(board) ? (
+        <View style={[styles.notice, { backgroundColor: c.warningSubtle }]}>
+          <Text style={[textStyles.caption, { color: c.warning }]}>
+            {describeFallback(board)}
+          </Text>
+        </View>
       ) : null}
     </View>
   )
@@ -221,6 +246,8 @@ function Row({ entry, isMe }: { entry: Leaderboard['entries'][number]; isMe: boo
 const styles = StyleSheet.create({
   list: { paddingHorizontal: space[5], flexGrow: 1 },
   chipRow: { flexDirection: 'row', gap: space[2], flexWrap: 'wrap' },
+  boardMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' },
+  notice: { padding: space[3], borderRadius: radius.md },
   // 38px was under the 44px minimum, and these are the controls that decide
   // which board a worker is looking at.
   chip: {
