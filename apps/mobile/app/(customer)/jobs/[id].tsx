@@ -145,7 +145,8 @@ export default function CustomerJobScreen() {
     if (!job) return
     showAlert(
       'Set up regular service?',
-      `We will book ${job.worker?.firstName ?? 'a pro'} for this again automatically. You can change or stop it any time.`,
+      `We will book ${job.worker?.firstName ?? 'a pro'} for this again automatically. `
+      + 'Change or stop it whenever you like under Regular on your home screen.',
       [
         { text: 'Not now', style: 'cancel' },
         { text: 'Every week', onPress: () => void run(() => api.makeRecurring(job.id, { interval: 'WEEKLY' }), 'Could not set that up') },

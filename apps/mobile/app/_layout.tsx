@@ -48,6 +48,9 @@ export default function RootLayout() {
             <Stack.Screen name="(customer)/home" options={{ headerShown: false }} />
             <Stack.Screen name="(customer)/post" options={{ title: 'Post a job' }} />
             <Stack.Screen name="(customer)/payment-methods" options={{ title: 'How you pay' }} />
+            {/* Where a standing arrangement can be stopped. Until this existed,
+                it could be started and not stopped. */}
+            <Stack.Screen name="(customer)/recurring" options={{ title: 'Regular services' }} />
             <Stack.Screen name="(customer)/jobs/[id]" options={{ title: 'Your job' }} />
             <Stack.Screen name="(customer)/properties/new" options={{ title: 'Add a property' }} />
             <Stack.Screen name="(customer)/report/[id]" options={{ title: 'Report a problem' }} />

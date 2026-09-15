@@ -79,6 +79,7 @@ export default function CustomerHomeScreen() {
         <Quick label="Messages" onPress={() => router.push('/(shared)/messages')} />
         {/* Reachable before posting, not discovered when a charge fails. */}
         <Quick label="Payment" onPress={() => router.push('/(customer)/payment-methods')} />
+        <Quick label="Regular" onPress={() => router.push('/(customer)/recurring')} />
         <Quick label="Settings" onPress={() => router.push('/(shared)/settings')} />
       </View>
 

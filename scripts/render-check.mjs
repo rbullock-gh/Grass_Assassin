@@ -106,6 +106,7 @@ async function main() {
     // Where sign-out lives. Before this screen existed there was no way out of
     // the app at all.
     { name: 'settings', path: '/settings', as: worker },
+    { name: 'recurring', path: '/recurring', as: customer },
   ].filter(Boolean)
 
   const browser = await launchChromium()
