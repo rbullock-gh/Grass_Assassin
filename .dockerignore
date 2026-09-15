@@ -1,0 +1,18 @@
+# Everything a build does not need, kept out of the context. A large context is
+# slow to send and quietly invalidates cache layers.
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.expo
+**/.expo-web-ci
+**/.web
+.render-check
+.render-check-admin
+.git
+.github
+**/*.log
+# Never: a stray .env in the context can end up in a layer.
+**/.env
+**/.env.*
+!**/.env.example

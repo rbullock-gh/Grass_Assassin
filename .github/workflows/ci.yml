@@ -383,3 +383,119 @@ jobs:
         run: |
           echo '--- api ---'; cat /tmp/api.log
           echo '--- web ---'; cat /tmp/web.log
+
+  images:
+    name: Build the container images and run them
+    runs-on: ubuntu-latest
+    needs: verify
+
+    # These were written without a container runtime available, so until this
+    # job runs they are reasoning rather than fact. Building them is half the
+    # check; the other half is starting the API image and driving the whole
+    # marketplace through it, because an image that builds and cannot serve is
+    # not obviously better than one that does not build.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: grass
+          POSTGRES_PASSWORD: grass
+          POSTGRES_DB: grassassassin_images
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_images
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          tags: grassassassin-api:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build the admin image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/admin/Dockerfile
+          tags: grassassassin-admin:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # host.docker.internal is not a thing on a Linux runner, so the
+      # containers join the host's network namespace and reach postgres on
+      # localhost the same way the runner does.
+      - name: Migrate and seed with the image itself
+        run: |
+          docker run --rm --network host -e DATABASE_URL="$DATABASE_URL" \
+            grassassassin-api:ci npx prisma migrate deploy --schema prisma/schema.prisma
+          pnpm install --frozen-lockfile
+          pnpm --filter @grassassassin/api db:generate
+          pnpm --filter @grassassassin/api db:seed
+
+      - name: The API image serves the whole marketplace
+        run: |
+          docker run -d --name api --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e PORT=4000 \
+            -e JWT_ACCESS_SECRET=ci-access-secret-at-least-32-characters-long \
+            -e JWT_REFRESH_SECRET=ci-refresh-secret-at-least-32-characters-long \
+            grassassassin-api:ci
+          for _ in $(seq 1 40); do
+            curl -sf http://localhost:4000/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/health || { docker logs api; exit 1; }
+          bash scripts/smoke-test.sh
+
+      - name: The image can create the first administrator
+        run: |
+          docker run --rm --network host -e DATABASE_URL="$DATABASE_URL" \
+            grassassassin-api:ci node dist/admin-create.js \
+              --email admin@grassassassin.test \
+              --password ci-admin-password-not-a-real-secret \
+              --name 'CI Admin'
+
+      - name: The admin image serves, and is locked
+        run: |
+          docker run -d --name admin --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e PORT=3001 \
+            -e ADMIN_SESSION_SECRET=ci-admin-session-secret-at-least-32-chars \
+            -e API_BASE_URL=http://localhost:4000 \
+            -e ADMIN_SERVICE_TOKEN=ci-admin-service-token-at-least-32-chars-x \
+            grassassassin-admin:ci
+          for _ in $(seq 1 40); do
+            curl -sf -o /dev/null http://localhost:3001/sign-in && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:3001/sign-in || { docker logs admin; exit 1; }
+          pnpm exec playwright install --with-deps chromium
+          ADMIN_EMAIL=admin@grassassassin.test \
+          ADMIN_PASSWORD=ci-admin-password-not-a-real-secret \
+            node scripts/admin-auth-check.mjs --base http://localhost:3001
+
+      - name: Container logs
+        if: failure()
+        run: |
+          docker logs api 2>&1 || true
+          docker logs admin 2>&1 || true

@@ -1,0 +1,138 @@
+# Deployment
+
+What runs in production, how it is built, and the things that will bite you.
+
+## The shape of it
+
+Four processes and two stores:
+
+| | |
+|---|---|
+| **API** (`apps/api`) | Fastify. The only process holding payment credentials. Stateless; scale horizontally. |
+| **Admin** (`apps/admin`) | Next.js. Reads the database directly for its own pages; sends anything that moves money to the API. |
+| **Mobile** (`apps/mobile`) | Expo. Shipped through the app stores and OTA updates, not deployed here. |
+| **Worker** | The same API image, run with the queue consumer enabled. |
+| **PostgreSQL 16 + PostGIS 3.4** | Not optional. Job search is `ST_DWithin` against a `geography` column with a GIST index; the schema will not migrate without the extension. |
+| **Redis** | BullMQ. Without it the API falls back to an in-memory queue and says so on startup — reminders, leaderboard rebuilds and recurring jobs silently stop happening. |
+
+## Building
+
+```bash
+docker build -f apps/api/Dockerfile   -t grassassassin-api   .
+docker build -f apps/admin/Dockerfile -t grassassassin-admin .
+```
+
+Both are multi-stage and run as a non-root user. The build context is the
+repository root — the workspace packages are part of both builds.
+
+### Why the API bundles
+
+`tsc` alone produced a `dist` that could not start. The workspace packages ship
+TypeScript source (`@grassassassin/shared`'s entry point is literally
+`src/index.ts`), so the emitted JavaScript imported files Node cannot load and
+the server died on its first import. The typecheck passed, the build passed, and
+the start script had never been run.
+
+`apps/api/build.mjs` bundles with esbuild, inlining the workspace packages so
+there is no cross-package resolution left at runtime. Registry dependencies stay
+external and are installed normally: bundling argon2 or the Prisma engines
+breaks them, and patching a CVE in a bundled dependency means a rebuild rather
+than an install.
+
+### The Prisma client
+
+`pnpm deploy --prod` gives a pruned tree with `@prisma/client` but **not** the
+generated client, and it cannot generate one for itself — the generator needs
+the CLI, which by then has been pruned. `apps/api/scripts/stage-prisma-client.mjs`
+resolves where the generator actually wrote it and copies it into the pruned
+tree. The Prisma CLI itself is a runtime dependency rather than a dev one, so
+the image can run `prisma migrate deploy`.
+
+## Migrations
+
+Run as a one-shot task **before** the new version starts, never from application
+startup — two replicas booting at once would race to migrate the same database.
+
+```bash
+docker run --rm -e DATABASE_URL=... grassassassin-api \
+  npx prisma migrate deploy --schema prisma/schema.prisma
+```
+
+Migrations must be backward compatible for the length of a rollout, because both
+versions run at once. Add columns nullable, backfill, then tighten in a later
+release. CI checks for schema drift structurally rather than by diffing text.
+
+## Configuration
+
+Every variable is in `.env.example`. The ones that fail closed, deliberately:
+
+| Variable | If missing in production |
+|---|---|
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | API refuses to start |
+| `STRIPE_SECRET_KEY` | API refuses to start |
+| `ADMIN_SESSION_SECRET` | Admin returns 500 on every route rather than serving unauthenticated |
+| `DATABASE_URL` | Both refuse to start |
+
+`ADMIN_SERVICE_TOKEN` must match between the API and the admin, and is what lets
+the dashboard ask the API to issue a refund. It is not on its own sufficient:
+the API also requires the acting administrator's id and verifies that person
+really is an active administrator, so a leaked token cannot act as an arbitrary
+user.
+
+## The first administrator
+
+The dashboard has no shared password and no bootstrap account. Make one:
+
+```bash
+docker run --rm -e DATABASE_URL=... grassassassin-api \
+  node dist/admin-create.js --email you@example.com --password '...' --name 'Your Name'
+```
+
+It is bundled into the image alongside the server for exactly this reason: it
+started life as a `tsx` script, which made the production answer to "how do you
+get into the dashboard at all" into "have a checkout handy".
+
+Idempotent — an existing account is granted the role rather than duplicated.
+From a checkout, `pnpm --filter @grassassassin/api admin:create -- …` does the
+same thing.
+
+## Health and rollout
+
+Both images declare a `HEALTHCHECK`. The API's `/health` verifies it is actually
+serving, which "the container is running" does not. Point the orchestrator's
+readiness probe at it and roll one instance at a time.
+
+## Locally
+
+```bash
+docker compose up --build
+```
+
+PostGIS, Redis, migrations, the API on :4000 and the admin on :3001. The secrets
+in `docker-compose.yml` are fake and visible on purpose; it is for development.
+
+The images are production-shaped, so they do not carry `tsx` and cannot seed
+themselves. Seed from a checkout against the exposed database:
+
+```bash
+DATABASE_URL=postgresql://grass:grass@localhost:5432/grassassassin \
+  pnpm --filter @grassassassin/api db:seed
+```
+
+## What is not verified
+
+The images have never been built. There is no container runtime in the
+environment this was written in, so everything above is reasoned from what was
+verified by hand, using a directory assembled to contain exactly what the image
+will: the bundled server runs and serves the complete marketplace loop — post,
+claim, message, photo upload, geofenced start, approve, pay, points, rate,
+recurring — from nothing but `dist`, a pruned `node_modules` and `prisma`;
+`dist/admin-create.js` really creates an administrator from that same tree;
+`prisma migrate deploy` runs from it; and the admin's standalone output serves
+and passes all 54 of its auth checks and 64 render combinations. The Dockerfiles assemble exactly those
+pieces, but assembling them inside a real build has not happened. CI builds both
+images so the first run will say.
+
+No Terraform, no Kubernetes manifests, no CDN or WAF configuration. Object
+storage for photos is behind a provider interface with a working fake; the R2
+adapter is written but has never been pointed at a real bucket.

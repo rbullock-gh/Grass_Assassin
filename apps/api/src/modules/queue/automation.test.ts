@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest'
 import {
   prisma, resetDatabase, createCategory, createCustomer, createWorker,
   createProperty, createJob, NASHVILLE,
@@ -29,7 +29,25 @@ beforeAll(async () => {
 })
 afterAll(async () => { await prisma.$disconnect() })
 
+afterEach(() => { vi.useRealTimers() })
+
+/**
+ * A fixed early afternoon, in the market's own timezone.
+ *
+ * Three tests in this file assert that a push was delivered, and delivery is
+ * suppressed during quiet hours — 21:00 to 07:00 local. The handlers ask the
+ * real clock, so those tests passed when the suite ran in the afternoon and
+ * failed when it ran in the evening: ten hours of every day where CI would go
+ * red on code that is working exactly as designed. This is 13:00 US Central.
+ *
+ * Only Date is faked. Faking the timers as well would stop the real database
+ * I/O these tests depend on from ever completing.
+ */
+const MIDDAY_CENTRAL = new Date('2026-06-15T18:00:00Z')
+
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: MIDDAY_CENTRAL })
+
   await resetDatabase()
   provider.reset()
   push.reset()

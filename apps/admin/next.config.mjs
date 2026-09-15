@@ -2,9 +2,18 @@
 export default {
   reactStrictMode: true,
 
-  // The admin reads the marketplace database directly rather than going through
-  // the public API. It is a staff tool on a trusted network, and going through
-  // the API would mean exposing admin-only endpoints on a public surface.
+  // Traces the files actually needed and writes a self-contained server, so the
+  // image does not have to carry the monorepo or a full node_modules.
+  output: 'standalone',
+  // Standalone tracing starts from this directory; without it Next guesses the
+  // app folder and leaves the workspace's hoisted dependencies behind.
+  outputFileTracingRoot: new URL('../../', import.meta.url).pathname,
+
+  // The admin reads the marketplace database directly for its own pages rather
+  // than going through the public API, which would mean exposing admin-only
+  // read endpoints on a public surface. Writes that move money go the other
+  // way — through the API, which is the only process holding the payment
+  // provider's credentials. See src/app/(dashboard)/disputes/actions.ts.
   serverExternalPackages: ['@prisma/client'],
 
   // The shared package ships TypeScript source, not a build, so webpack has to

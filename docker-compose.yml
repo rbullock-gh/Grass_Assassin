@@ -1,0 +1,95 @@
+# The whole stack, locally.
+#
+# `docker compose up` gives a working marketplace: PostGIS, Redis, the API and
+# the admin dashboard, migrated and seeded, with an administrator account to
+# sign in as. Intended for development and for trying the thing out — the
+# secrets below are visible, deliberately fake, and must not follow you to a
+# server.
+
+name: grassassassin
+
+services:
+  db:
+    # PostGIS, not plain Postgres. Job search is ST_DWithin against a geography
+    # column with a GIST index; without the extension the schema will not even
+    # migrate.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: grass
+      POSTGRES_PASSWORD: grass
+      POSTGRES_DB: grassassassin
+    ports: ['5432:5432']
+    volumes: ['db-data:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U grass -d grassassassin']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    # Scheduled work — reminders, leaderboard rebuilds, recurring jobs — runs
+    # through BullMQ. Without Redis the API falls back to an in-memory queue and
+    # says so on startup, and nothing scheduled actually happens.
+    image: redis:7-alpine
+    ports: ['6379:6379']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Migrations run as their own one-shot service rather than on API startup.
+  # Two API replicas starting at once would otherwise race to migrate the same
+  # database, which is a bad way to find out what that does.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://grass:grass@db:5432/grassassassin
+    depends_on:
+      db: { condition: service_healthy }
+    command: ['npx', 'prisma', 'migrate', 'deploy', '--schema', 'prisma/schema.prisma']
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://grass:grass@db:5432/grassassassin
+      REDIS_URL: redis://redis:6379
+      # Fake, and fine to read: this file is for local use. Production supplies
+      # its own, and the API refuses to start in production without real ones.
+      JWT_ACCESS_SECRET: local-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: local-refresh-secret-at-least-32-characters
+      ADMIN_SERVICE_TOKEN: local-service-token-at-least-32-characters
+      # Lets the fake storage provider hand out upload URLs a phone on the same
+      # network can actually reach.
+      PUBLIC_BASE_URL: http://localhost:4000
+    ports: ['4000:4000']
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://grass:grass@db:5432/grassassassin
+      ADMIN_SESSION_SECRET: local-admin-session-secret-at-least-32-ch
+      API_BASE_URL: http://api:4000
+      ADMIN_SERVICE_TOKEN: local-service-token-at-least-32-characters
+    ports: ['3001:3001']
+    depends_on:
+      db: { condition: service_healthy }
+      api: { condition: service_started }
+
+volumes:
+  db-data:

@@ -215,3 +215,18 @@ This drives the Expo **web** build, which is not a phone: gestures, native maps,
 the camera and SecureStore all behave differently and remain unproven here.
 
 Copy `.env.example` to `.env` for the full variable list.
+
+### Running the whole stack in containers
+
+```bash
+docker compose up --build     # PostGIS, Redis, migrations, API :4000, admin :3001
+```
+
+`docs/04-deployment.md` covers what runs where, which variables fail closed, how
+migrations are applied, and — importantly — what has not been verified. The
+images have never been built: there is no container runtime in the environment
+this was written in. What *was* verified by hand is that the bundled API serves
+the complete marketplace loop from a directory containing only `dist`, a pruned
+`node_modules` and `prisma`, which is exactly what the image assembles. CI
+builds both images and drives the marketplace through them, so the first run
+will say whether the assembly is right.
