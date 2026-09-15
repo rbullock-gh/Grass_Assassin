@@ -9,18 +9,20 @@ done, the customer approves, the worker gets paid, and both sides rate each othe
 ## Status
 
 **Phases 0–4 are built. The API is a working marketplace, the admin dashboard
-is visually verified, and the Expo app is written and typechecked.**
+is authenticated and can settle disputes, and the Expo app is written and
+typechecked.**
 See `docs/03-roadmap-and-team.md`.
 
 | | |
 |---|---|
-| Tests passing | **759** (144 domain · 327 API · 214 mobile · 37 design · 19 client · 18 admin) |
+| Tests passing | **894** (161 domain · 364 API · 214 mobile · 37 design · 19 client · 37 admin) plus 85 browser checks |
 | Database | PostgreSQL 16 + PostGIS 3.4 · 48 tables · 6 GIST indexes · 18 CHECK constraints |
-| CI | green — typecheck, full suite against real PostGIS, structural migration-drift check, and an end-to-end smoke run against a live server |
+| CI | green on typecheck, the full suite against real PostGIS, a structural migration-drift check, a mobile bundle on a cold cache, and an end-to-end smoke run against a live server. Two further jobs — rendering every mobile screen, and driving the admin dashboard's locks against a production build — are configured and pass locally but have not yet run on a GitHub runner |
 | Verified end to end | post → search → claim → message → photo upload → geofenced start → complete → approve → pay → points → rate → tip → recurring, over real HTTP |
 | Verified operationally | an admin changed the commission in the dashboard and the next job priced differently — no deploy, no restart |
 | Verified visually | admin dashboard rendered in Chromium, light + dark + 390px mobile, zero console errors |
-| Verified visually (mobile) | every screen rendered in Chromium via the Expo web build — 60 screen × viewport × theme combinations (phone, Fold width, tablet, desktop; light and dark), signed in against the live API, with zero console errors, zero page errors, zero horizontal overflow and no unmatched routes |
+| Verified adversarially | admin sign-in driven in a browser: forged, tampered and expired sessions refused; a real customer and a real worker refused with their correct passwords; a revoked administrator loses access on the next request; guessing throttled per source without letting one attacker lock everyone out. Each with a negative control — removing the gate fails 20 of 54 checks, removing the per-request re-read fails exactly the 5 revocation checks |
+| Verified visually (mobile) | every screen rendered in Chromium via the Expo web build — 96 screen × viewport × theme combinations (phone, Fold width, tablet, desktop; light and dark), signed in against the live API, with zero console errors, zero page errors, zero horizontal overflow and no unmatched routes |
 | **Not verified** | the Stripe adapter (no credentials here), push delivery, device geocoding, and **native behaviour on a real iOS/Android device** — the app bundles and renders, but React Native Web is not the same runtime as a phone, so gestures, maps, the camera and SecureStore remain unproven |
 
 Mobile app surfaces: worker onboarding, map with all seven filters, job detail,
@@ -144,9 +146,51 @@ pnpm -r typecheck
 
 pnpm dev:api        # http://localhost:4000 — /health, /v1/categories, /v1/leaderboard
 
-pnpm --filter @grassassassin/admin dev     # http://localhost:3001
 pnpm --filter @grassassassin/mobile start  # Expo — needs a device or simulator
 ```
+
+### The admin dashboard
+
+It can change the platform commission and settle disputes, so it does not run
+unauthenticated: without `ADMIN_SESSION_SECRET` it refuses to start in
+production, and administrators sign in with their own accounts rather than a
+shared password — which is what lets a dispute resolution record who decided it.
+
+```bash
+# Make the first administrator. Idempotent: an existing account is granted the
+# role rather than duplicated.
+pnpm --filter @grassassassin/api admin:create -- \
+  --email you@example.com --password '...' --name 'Your Name'
+
+ADMIN_SESSION_SECRET=at-least-32-characters-long \
+API_BASE_URL=http://localhost:4000 \
+ADMIN_SERVICE_TOKEN=at-least-32-characters-long \
+  pnpm --filter @grassassassin/admin dev     # http://localhost:3001
+```
+
+`ADMIN_SERVICE_TOKEN` is only needed to resolve disputes. The refund is issued
+by the API, which is the only process that should hold the payment provider's
+credentials; the dashboard proves it is the dashboard with that token and names
+the administrator who clicked, and the API checks that person really is one.
+
+Leaving the secret unset runs it open locally, with a banner on every page
+saying so.
+
+### Checking the dashboard's locks actually lock
+
+```bash
+node scripts/admin-auth-check.mjs         # 54 checks: gating, cookie flags, forged
+                                          # and expired sessions, open redirects
+node scripts/admin-revocation-check.mjs   # 17 checks: suspending, banning, deleting or
+                                          # demoting an admin ends access on the NEXT
+                                          # request, not at cookie expiry
+node scripts/admin-bruteforce-check.mjs   # 14 checks: guessing is throttled per source,
+                                          # and one attacker cannot lock everyone out
+```
+
+All three run in CI against a production build. They need an administrator
+account and a running dashboard; the revocation script mutates the database and
+restores what it changed, so point it at a development one.
 
 ### Rendering every screen and checking what broke
 
@@ -159,7 +203,7 @@ screenshot.
 ```bash
 pnpm --filter @grassassassin/mobile exec expo export --platform web --output-dir .web
 node scripts/serve-web.mjs .web &
-node scripts/render-check.mjs        # 84 combinations, ~3.5 minutes
+node scripts/render-check.mjs        # 96 combinations, ~3.5 minutes
 ```
 
 Every screen at four widths (phone, Fold, tablet, desktop) in both themes,
