@@ -11,6 +11,7 @@ import { displayMoney, displayPrice, formatDeadline } from '@/lib/jobs'
 import {
   customerStatus, customerActions, autoApproveNotice, tipOptions,
 } from '@/lib/customer-jobs'
+import { ListingPhotos } from '@/components/listing-photos'
 
 /**
  * Tracking a job you are paying for.
@@ -231,6 +232,16 @@ export default function CustomerJobScreen() {
             </Text>
           </View>
         </Pressable>
+      ) : null}
+
+      {/* Only while it is still unclaimed — the server refuses listing photos
+          once a pro has taken the job, since they chose it on what they saw. */}
+      {job.viewerRole === 'CUSTOMER' && (job.status === 'POSTED' || job.status === 'DRAFT') ? (
+        <ListingPhotos
+          jobId={job.id}
+          existing={job.photos.filter((photo) => photo.kind === 'LISTING')}
+          onUploaded={() => void load()}
+        />
       ) : null}
 
       {afterPhotos.length > 0 ? (

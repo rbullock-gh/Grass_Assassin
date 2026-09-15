@@ -102,8 +102,12 @@ export default function PostJobScreen() {
         specialInstructions: draft.specialInstructions || undefined,
         yardSize: draft.yardSize ?? undefined,
         equipmentProvided: draft.equipmentProvided,
-        photoIds: draft.photoIds,
       })
+      // Photos are added on the job screen, not here. A photo has to be
+      // presigned against a job, and the job does not exist until this call
+      // returns — so collecting them first was never possible. Posting first
+      // is also the better order: the job goes live in seconds and the
+      // customer enriches it while pros are already seeing it.
       router.replace(`/(customer)/jobs/${job.id}`)
     } catch (error) {
       Alert.alert(

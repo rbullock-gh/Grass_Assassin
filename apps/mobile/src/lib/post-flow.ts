@@ -22,7 +22,6 @@ export type YardSize = 'UNDER_QUARTER_ACRE' | 'QUARTER_TO_HALF' | 'HALF_TO_ONE' 
 export interface PostDraft {
   categoryId: string | null
   description: string
-  photoIds: string[]
   propertyId: string | null
   dueAt: Date | null
   windowStartAt: Date | null
@@ -36,7 +35,6 @@ export interface PostDraft {
 export const EMPTY_DRAFT: PostDraft = {
   categoryId: null,
   description: '',
-  photoIds: [],
   propertyId: null,
   dueAt: null,
   windowStartAt: null,
