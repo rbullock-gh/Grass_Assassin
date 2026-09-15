@@ -57,9 +57,20 @@ async function submitPassword(page, password, email = EMAIL) {
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
 
+/**
+ * A fresh source address per run.
+ *
+ * This suite deliberately fails a few sign-ins, and the dashboard throttles by
+ * source. Without this, the fourth or fifth consecutive run would start from a
+ * throttled address and report failures against code that is working perfectly
+ * — a test that breaks because it was run too often is worse than no test.
+ */
+const RUN_IP = `198.51.100.${1 + Math.floor(Math.random() * 250)}`
+const newContext = () => browser.newContext({ extraHTTPHeaders: { 'x-forwarded-for': RUN_IP } })
+
 // ---- 1. A fresh visitor cannot reach the money pages -------------------
 {
-  const ctx = await browser.newContext()
+  const ctx = await newContext()
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
@@ -88,7 +99,7 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
 
 // ---- 2. The wrong password is refused ---------------------------------
 {
-  const ctx = await browser.newContext()
+  const ctx = await newContext()
   const page = await ctx.newPage()
   await page.goto(`${BASE}/sign-in?next=%2Fconfig`, { waitUntil: 'networkidle' })
   await submitPassword(page, 'not-the-password')
@@ -114,7 +125,7 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
 // ---- 3. The right password opens exactly the page they asked for ------
 let goodCookie
 {
-  const ctx = await browser.newContext()
+  const ctx = await newContext()
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
@@ -161,7 +172,7 @@ let goodCookie
   // genuine seeded customers with genuine passwords; the password being right
   // is exactly why this has to be refused.
   for (const email of ['customer1@grassassassin.test', 'worker1@grassassassin.test']) {
-    const ctx = await browser.newContext()
+    const ctx = await newContext()
     const page = await ctx.newPage()
     await page.goto(`${BASE}/sign-in?next=%2Fconfig`, { waitUntil: 'networkidle' })
     await submitPassword(page, NON_ADMIN_PASSWORD, email)
@@ -177,7 +188,7 @@ let goodCookie
   // A correctly signed cookie is still only an assertion of identity. This is
   // the re-read: the signature is genuine, the account is real, the role is
   // not there. Without the per-request check this would sail through.
-  const ctx = await browser.newContext()
+  const ctx = await newContext()
   const page = await ctx.newPage()
   const [, expiry, nonce, sig] = goodCookie.value.split('.')
   // Not forgeable without the secret, so this asserts the *shape* is refused
@@ -195,7 +206,7 @@ let goodCookie
 
 // ---- 3d. Signing out actually ends the session ------------------------
 {
-  const ctx = await browser.newContext()
+  const ctx = await newContext()
   const page = await ctx.newPage()
   await page.goto(`${BASE}/sign-in`, { waitUntil: 'networkidle' })
   await submitPassword(page, PASSWORD)
@@ -230,7 +241,7 @@ let goodCookie
   ]
 
   for (const [label, value] of cases) {
-    const ctx = await browser.newContext()
+    const ctx = await newContext()
     const page = await ctx.newPage()
     await ctx.addCookies([{ name: 'ga_admin', value, domain: new URL(BASE).hostname, path: '/' }])
     await page.goto(`${BASE}/config`, { waitUntil: 'networkidle' })
@@ -247,7 +258,7 @@ async function signLike(_expiry, _nonce) { return goodCookie.value.split('.')[2]
 // ---- 5. ?next= cannot be used as an open redirect ---------------------
 {
   for (const evil of ['https://evil.example/', '//evil.example/', 'javascript:alert(1)']) {
-    const ctx = await browser.newContext()
+    const ctx = await newContext()
     const page = await ctx.newPage()
     await page.goto(`${BASE}/sign-in?next=${encodeURIComponent(evil)}`, { waitUntil: 'networkidle' })
     await submitPassword(page, PASSWORD)
