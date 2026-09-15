@@ -1,0 +1,517 @@
+/*
+ * Marketing site styling.
+ *
+ * The token block below mirrors @grassassassin/design, restated as CSS custom
+ * properties for the same reason apps/admin does it: a static page should not
+ * ship a token module to the client just to paint itself.
+ *
+ * Unlike admin, the mirror is enforced. test/tokens.test.ts parses this file
+ * and asserts every --ga-* value equals the token it claims to mirror, so the
+ * page a customer sees cannot drift from the app they download. Change a token
+ * in packages/design and this file fails the suite until it follows.
+ *
+ * Do not hand-edit a value in this block without changing the token it mirrors.
+ */
+:root {
+  color-scheme: light;
+
+  /* -- semanticLight ------------------------------------------------------ */
+  --ga-background: #F4F7F5;      /* background */
+  --ga-surface: #FFFFFF;         /* surface */
+  --ga-surface-raised: #FFFFFF;  /* surfaceRaised */
+  --ga-surface-sunken: #E6ECE8;  /* surfaceSunken */
+  --ga-border: #CFD8D2;          /* border */
+  --ga-border-strong: #A8B6AE;   /* borderStrong */
+  --ga-text-primary: #0B1410;    /* textPrimary */
+  --ga-text-secondary: #566B5F;  /* textSecondary */
+  --ga-text-tertiary: #566B5F;   /* textTertiary */
+  --ga-text-inverse: #FFFFFF;    /* textInverse */
+  --ga-brand: #0F833B;           /* brand */
+  --ga-brand-hover: #0C682F;     /* brandHover */
+  --ga-brand-pressed: #0A5227;   /* brandPressed */
+  --ga-brand-subtle: #EDFBF0;    /* brandSubtle */
+  --ga-on-brand: #FFFFFF;        /* onBrand */
+  --ga-success-ink: #0C682F;     /* successInk */
+  --ga-rank: #8A6208;            /* rank */
+  --ga-rank-subtle: #FBF0D4;     /* rankSubtle */
+
+  /* -- palette constants --------------------------------------------------
+     The hero is dark in both themes, so its colours are fixed rather than
+     semantic. Named from the palette so the drift test still covers them. */
+  --ga-hero-bg: #0B1410;         /* palette.ink900 */
+  --ga-hero-surface: #16211B;    /* palette.ink800 */
+  --ga-hero-line: #24332B;       /* palette.ink700 */
+  --ga-hero-text: #F4F7F5;       /* palette.ink50 */
+  --ga-hero-muted: #A8B6AE;      /* palette.ink300 */
+  --ga-hero-brand: #39C26F;      /* palette.green400 */
+
+  /* -- non-token layout values -------------------------------------------- */
+  --ga-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --shell: 1140px;
+  --gutter: clamp(1.15rem, 4vw, 2.5rem);
+  --section-y: clamp(3.5rem, 7.5vw, 6rem);
+  --radius: 10px;
+  --radius-lg: 18px;
+  --shadow: 0 1px 2px rgba(11, 20, 16, 0.05), 0 6px 18px rgba(11, 20, 16, 0.06);
+  --shadow-lg: 0 18px 50px rgba(11, 20, 16, 0.14);
+  --header-h: 68px;
+  --ease: cubic-bezier(0.22, 0.68, 0.28, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    /* -- semanticDark ---------------------------------------------------- */
+    --ga-background: #0B1410;      /* background */
+    --ga-surface: #16211B;         /* surface */
+    --ga-surface-raised: #24332B;  /* surfaceRaised */
+    --ga-surface-sunken: #060D0A;  /* surfaceSunken */
+    --ga-border: #24332B;          /* border */
+    --ga-border-strong: #3A4B41;   /* borderStrong */
+    --ga-text-primary: #F4F7F5;    /* textPrimary */
+    --ga-text-secondary: #A8B6AE;  /* textSecondary */
+    --ga-text-tertiary: #7C8F85;   /* textTertiary */
+    --ga-text-inverse: #0B1410;    /* textInverse */
+    --ga-brand: #39C26F;           /* brand */
+    --ga-brand-hover: #69D894;     /* brandHover */
+    --ga-brand-pressed: #A6E9BC;   /* brandPressed */
+    --ga-brand-subtle: rgba(57, 194, 111, 0.14); /* brandSubtle */
+    --ga-on-brand: #0B1410;        /* onBrand */
+    --ga-success-ink: #39C26F;     /* successInk */
+    --ga-rank: #EBB833;            /* rank */
+    --ga-rank-subtle: rgba(217, 162, 27, 0.18); /* rankSubtle */
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  scroll-padding-top: calc(var(--header-h) + 16px);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ga-background);
+  color: var(--ga-text-primary);
+  font-family: var(--ga-font);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+p { margin: 0 0 1rem; }
+p:last-child { margin-bottom: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+a { color: inherit; }
+img, svg { max-width: 100%; }
+
+/* Money and percentages use tabular figures: a column of rates where the
+   digits jitter reads as amateur, and the rate is the most scanned number
+   a worker looks at on this page. */
+.tnum { font-variant-numeric: tabular-nums lining-nums; }
+
+:focus-visible {
+  outline: 3px solid var(--ga-brand);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.on-dark :focus-visible { outline-color: var(--ga-hero-brand); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.skip {
+  position: absolute; left: 12px; top: -60px; z-index: 200;
+  background: var(--ga-brand); color: var(--ga-on-brand);
+  padding: 0.7rem 1.2rem; border-radius: 0 0 10px 10px;
+  font-weight: 600; text-decoration: none;
+  transition: top 0.18s var(--ease);
+}
+.skip:focus { top: 0; }
+
+.shell {
+  width: min(100% - (var(--gutter) * 2), var(--shell));
+  margin-inline: auto;
+}
+.shell--narrow { max-width: 760px; }
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  background: var(--ga-brand); color: var(--ga-on-brand);
+  font-family: inherit; font-size: 1rem; font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 0.8rem 1.4rem;
+  border: 0; border-radius: var(--radius);
+  text-decoration: none; cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+/* Hover DARKENS in light mode and LIGHTENS in dark, because --ga-brand moves
+   in opposite directions between the two. Getting this wrong makes the button
+   least readable at the exact moment it is being read. */
+.btn:hover { background: var(--ga-brand-hover); }
+.btn:active { background: var(--ga-brand-pressed); }
+.btn[disabled] { opacity: 0.55; cursor: default; }
+.btn--lg { padding: 0.95rem 1.7rem; font-size: 1.05rem; }
+.btn--sm { padding: 0.5rem 1rem; font-size: 0.92rem; }
+.btn svg { width: 1.05em; height: 1.05em; flex: none; }
+
+/* On the dark hero the semantic brand is the light-mode green, which does not
+   read there — the hero carries its own pair. */
+.on-dark .btn { background: var(--ga-hero-brand); color: #0B1410; }
+.on-dark .btn:hover { background: #69D894; }
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+.head {
+  position: sticky; top: 0; z-index: 100;
+  background: color-mix(in srgb, var(--ga-hero-bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--ga-hero-line);
+}
+.head__in { min-height: var(--header-h); display: flex; align-items: center; gap: 1.25rem; }
+
+.brand {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  text-decoration: none; color: var(--ga-hero-text);
+  font-weight: 700; font-size: 1.15rem; letter-spacing: -0.03em;
+  margin-right: auto;
+}
+.brand__mark { width: 30px; height: 30px; flex: none; }
+
+.nav { display: flex; gap: 1.5rem; }
+.nav a {
+  color: var(--ga-hero-muted); text-decoration: none;
+  font-size: 0.94rem; font-weight: 500;
+  transition: color 0.16s var(--ease);
+}
+.nav a:hover { color: var(--ga-hero-text); }
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+
+.hero {
+  position: relative;
+  background: var(--ga-hero-bg);
+  color: var(--ga-hero-text);
+  padding: clamp(3rem, 7vw, 5rem) 0 clamp(3.5rem, 8vw, 5.5rem);
+  overflow: hidden;
+}
+/* Mower stripes. The one piece of brand texture on the page, and it costs no
+   image request. Angled like a mowing pass. */
+.hero::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(64% 84% at 80% 4%, rgba(57, 194, 111, 0.13), transparent 62%),
+    repeating-linear-gradient(107deg,
+      rgba(255, 255, 255, 0.026) 0 40px, transparent 40px 80px);
+}
+.hero__in {
+  position: relative;
+  display: grid; gap: clamp(2rem, 4vw, 3.5rem);
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+  align-items: start;
+}
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-size: 0.79rem; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--ga-hero-brand);
+  border: 1px solid rgba(57, 194, 111, 0.32);
+  border-radius: 999px; padding: 0.35rem 0.9rem; margin: 0 0 1.4rem;
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ga-hero-brand); flex: none; }
+
+.hero__h { font-size: clamp(2.2rem, 5.4vw, 3.5rem); }
+.hero__sub {
+  font-size: clamp(1.02rem, 1.8vw, 1.15rem);
+  color: var(--ga-hero-muted); margin: 1.2rem 0 0; max-width: 54ch;
+}
+.hero__pitch {
+  font-size: clamp(1.08rem, 2vw, 1.25rem); font-weight: 600;
+  letter-spacing: -0.02em; color: var(--ga-hero-text); margin: 0 0 1rem;
+}
+
+/* ---- audience switch ---- */
+.switch {
+  border: 0; padding: 0; margin: 2rem 0 1.6rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem;
+}
+.switch__lead { padding: 0; font-size: 0.86rem; color: var(--ga-hero-muted); }
+.switch__track {
+  display: inline-flex; gap: 4px; padding: 4px;
+  background: var(--ga-hero-surface); border: 1px solid var(--ga-hero-line);
+  border-radius: 999px;
+}
+.switch__input { position: absolute; opacity: 0; pointer-events: none; }
+.switch__opt {
+  cursor: pointer; user-select: none;
+  padding: 0.48rem 1.1rem; border-radius: 999px;
+  font-weight: 600; font-size: 0.92rem; color: var(--ga-hero-muted);
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+}
+.switch__opt:hover { color: var(--ga-hero-text); }
+.switch__input:checked + .switch__opt { background: var(--ga-hero-brand); color: #0B1410; }
+/* The inputs sit off-screen, so the ring has to be drawn on the label. */
+.switch__input:focus-visible + .switch__opt { outline: 3px solid var(--ga-hero-brand); outline-offset: 2px; }
+
+/* ---- panel swap ----------------------------------------------------------
+   Guarded by @supports: in a browser without :has() neither rule applies and
+   both panels stay on the page. Redundant, never broken. */
+@supports selector(:has(*)) {
+  body:has(#view-home:checked) .panel--pro,
+  body:has(#view-pro:checked) .panel--home { display: none; }
+}
+
+.ticks { display: grid; gap: 0.6rem; }
+.ticks li { display: flex; align-items: flex-start; gap: 0.65rem; font-size: 1rem; }
+.ticks svg { width: 1.1rem; height: 1.1rem; flex: none; color: var(--ga-hero-brand); margin-top: 0.28rem; }
+
+/* ==========================================================================
+   Sections
+   ========================================================================== */
+
+.sec { padding: var(--section-y) 0; }
+.sec--sunken { background: var(--ga-surface-sunken); }
+.sec--dark { background: var(--ga-hero-bg); color: var(--ga-hero-text); }
+
+.sec__h { font-size: clamp(1.7rem, 3.8vw, 2.4rem); }
+.sec__lead {
+  margin: 0.8rem 0 2.5rem; max-width: 60ch;
+  font-size: clamp(0.99rem, 1.6vw, 1.08rem); color: var(--ga-text-secondary);
+}
+.sec--dark .sec__lead { color: var(--ga-hero-muted); }
+
+.split { display: grid; gap: 1.35rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+.card {
+  background: var(--ga-surface); border: 1px solid var(--ga-border);
+  border-radius: var(--radius-lg); padding: clamp(1.5rem, 3vw, 1.9rem);
+  box-shadow: var(--shadow);
+}
+.card__h { display: flex; align-items: center; gap: 0.65rem; font-size: 1.22rem; margin-bottom: 1rem; }
+.card__h svg { width: 1.4rem; height: 1.4rem; flex: none; color: var(--ga-brand); }
+.card__list { display: grid; gap: 0.8rem; }
+.card__list li { position: relative; padding-left: 1.35rem; color: var(--ga-text-secondary); }
+.card__list li::before {
+  content: ""; position: absolute; left: 0; top: 0.6em;
+  width: 6px; height: 6px; border-radius: 2px; background: var(--ga-brand);
+}
+
+/* ---- steps ---- */
+.steps { display: grid; gap: 1.35rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.step {
+  position: relative; background: var(--ga-hero-surface);
+  border: 1px solid var(--ga-hero-line); border-radius: var(--radius-lg);
+  padding: 1.8rem 1.5rem 1.5rem;
+}
+.step__n {
+  position: absolute; top: -0.9rem; left: 1.5rem;
+  width: 1.9rem; height: 1.9rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--ga-hero-brand); color: #0B1410;
+  font-weight: 700; font-size: 0.9rem;
+}
+.step__h { display: flex; align-items: center; gap: 0.55rem; font-size: 1.1rem; margin: 0.3rem 0 0.6rem; }
+.step__h svg { width: 1.2rem; height: 1.2rem; flex: none; color: var(--ga-hero-brand); }
+.step p { color: var(--ga-hero-muted); font-size: 0.97rem; }
+
+/* ---- pricing ---- */
+.rates { display: grid; gap: 1.35rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.rate {
+  background: var(--ga-surface); border: 1px solid var(--ga-border);
+  border-radius: var(--radius-lg); padding: 1.7rem 1.5rem; text-align: center;
+  box-shadow: var(--shadow);
+}
+.rate__n {
+  font-size: clamp(2.4rem, 6vw, 3.2rem); font-weight: 700;
+  letter-spacing: -0.04em; line-height: 1; color: var(--ga-brand);
+}
+.rate__label { font-weight: 600; margin: 0.7rem 0 0.4rem; }
+.rate__note { font-size: 0.92rem; color: var(--ga-text-secondary); margin: 0; }
+.rates__foot { margin-top: 1.5rem; font-size: 0.93rem; color: var(--ga-text-secondary); }
+
+/* ---- status ---- */
+.status { display: grid; gap: 1.35rem; grid-template-columns: repeat(auto-fit, minmax(265px, 1fr)); }
+.status__col {
+  background: var(--ga-surface); border: 1px solid var(--ga-border);
+  border-top: 3px solid var(--ga-border-strong); border-radius: var(--radius); padding: 1.5rem;
+}
+.status__col--done { border-top-color: var(--ga-brand); }
+.status__col--soon { border-top-color: var(--ga-rank); }
+.status__h {
+  font-size: 0.8rem; letter-spacing: 0.09em; text-transform: uppercase;
+  font-weight: 700; margin-bottom: 0.9rem;
+}
+.status__col--done .status__h { color: var(--ga-success-ink); }
+.status__col--soon .status__h { color: var(--ga-rank); }
+.status__col--open .status__h { color: var(--ga-text-secondary); }
+.status__col ul { display: grid; gap: 0.7rem; }
+.status__col li { color: var(--ga-text-secondary); font-size: 0.96rem; }
+.status__col li strong { color: var(--ga-text-primary); }
+.status__note { margin-top: 1.6rem; font-size: 0.94rem; color: var(--ga-text-secondary); }
+
+/* ==========================================================================
+   Waitlist form
+   ========================================================================== */
+
+.signup {
+  background: var(--ga-hero-surface); border: 1px solid var(--ga-hero-line);
+  border-radius: var(--radius-lg); padding: clamp(1.4rem, 3vw, 1.9rem);
+}
+.signup__h { font-size: 1.3rem; margin-bottom: 0.4rem; }
+.signup__intro { color: var(--ga-hero-muted); font-size: 0.95rem; margin-bottom: 1.3rem; }
+/* Honeypot: bots fill it, people never see it. */
+.signup__hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.signup__row { display: grid; gap: 0.9rem; margin-bottom: 1.2rem; grid-template-columns: 1fr 140px; }
+.field { display: grid; gap: 0.4rem; }
+.field label {
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ga-hero-muted);
+}
+.field input {
+  font-family: inherit; font-size: 1rem; width: 100%;
+  color: var(--ga-hero-text); background: var(--ga-hero-bg);
+  border: 1px solid var(--ga-hero-line); border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.field input::placeholder { color: #6A7A72; }
+.field input:focus {
+  outline: none; border-color: var(--ga-hero-brand);
+  box-shadow: 0 0 0 3px rgba(57, 194, 111, 0.26);
+}
+.field input:user-invalid { border-color: #F87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2); }
+.signup .btn { width: 100%; }
+.signup__fine { margin: 0.9rem 0 0; font-size: 0.86rem; color: var(--ga-hero-muted); text-align: center; }
+.signup__error { color: #F87171; }
+.signup__done { display: grid; gap: 0.5rem; place-items: center; text-align: center; padding: 1.2rem 0; }
+.signup__done svg { width: 2.2rem; height: 2.2rem; color: var(--ga-hero-brand); }
+.signup__done strong { font-size: 1.2rem; }
+.signup__done p { color: var(--ga-hero-muted); }
+
+/* ---- rank ladder ---- */
+.ladder-wrap {
+  margin-top: 1.75rem;
+  /* The only element on the page allowed to scroll sideways, and only inside
+     its own box — three columns of numbers do not reflow usefully. */
+  overflow-x: auto;
+  border: 1px solid var(--ga-border);
+  border-radius: var(--radius-lg);
+  background: var(--ga-surface);
+}
+.ladder { width: 100%; border-collapse: collapse; min-width: 380px; }
+.ladder caption {
+  caption-side: top; text-align: left; padding: 1.2rem 1.4rem 0.9rem;
+  font-size: 0.93rem; color: var(--ga-text-secondary);
+}
+.ladder th, .ladder td { padding: 0.75rem 1.4rem; text-align: left; }
+.ladder thead th {
+  font-size: 0.76rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ga-text-secondary); border-bottom: 1px solid var(--ga-border);
+}
+.ladder tbody th { font-weight: 600; }
+.ladder tbody tr + tr th, .ladder tbody tr + tr td { border-top: 1px solid var(--ga-border); }
+.ladder tbody td:last-child { color: var(--ga-text-secondary); }
+.ladder tbody td.ladder__cut { color: var(--ga-success-ink); font-weight: 600; }
+
+/* ==========================================================================
+   404
+   ========================================================================== */
+
+.lost {
+  min-height: 100vh; display: grid; place-items: center; text-align: center;
+  background: var(--ga-hero-bg); color: var(--ga-hero-text);
+}
+.lost__in { max-width: 480px; padding: 2rem var(--gutter); display: grid; justify-items: center; gap: 0.5rem; }
+.lost__code {
+  font-size: 4rem; font-weight: 700; line-height: 1;
+  letter-spacing: -0.05em; color: var(--ga-hero-brand); margin: 0.9rem 0 0;
+}
+.lost h1 { font-size: clamp(1.6rem, 5vw, 2.1rem); margin: 0.4rem 0 0.5rem; }
+.lost p { color: var(--ga-hero-muted); margin-bottom: 1.5rem; }
+
+/* ==========================================================================
+   FAQ
+   ========================================================================== */
+
+.faq { display: grid; gap: 0.7rem; }
+.faq details {
+  background: var(--ga-surface); border: 1px solid var(--ga-border);
+  border-radius: var(--radius); padding: 0 1.3rem;
+}
+.faq summary {
+  cursor: pointer; list-style: none; position: relative;
+  padding: 1.1rem 2rem 1.1rem 0; font-weight: 600; font-size: 1.03rem;
+  letter-spacing: -0.01em;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: ""; position: absolute; right: 0.15rem; top: 50%;
+  width: 9px; height: 9px; margin-top: -6px;
+  border-right: 2.4px solid var(--ga-brand); border-bottom: 2.4px solid var(--ga-brand);
+  transform: rotate(45deg); transition: transform 0.2s var(--ease);
+}
+.faq details[open] summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.faq details p { color: var(--ga-text-secondary); padding-bottom: 1.25rem; max-width: 66ch; }
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.foot {
+  background: var(--ga-hero-bg); color: var(--ga-hero-muted);
+  padding: 2.75rem 0 3rem; border-top: 1px solid var(--ga-hero-line);
+}
+.foot__in { display: grid; gap: 0.6rem; justify-items: center; text-align: center; }
+.foot__legal { font-size: 0.86rem; color: #6A7A72; margin: 0; }
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .hero__in { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .nav { display: none; }
+  .brand { margin-right: 0; }
+  .head__cta { margin-left: auto; }
+  .signup__row { grid-template-columns: 1fr; }
+  .switch__track { width: 100%; }
+  .switch__opt { flex: 1; text-align: center; padding-inline: 0.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

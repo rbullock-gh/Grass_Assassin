@@ -80,6 +80,7 @@ packages/
   client/                 typed API client shared by mobile, web, and admin
 apps/
   admin/                  Next.js operations dashboard
+  web/                    Next.js marketing site — static export, waitlist capture
   mobile/                 Expo app — map, post flow, job tracking, messaging, leaderboards
 docs/
 ```
