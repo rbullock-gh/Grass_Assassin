@@ -57,6 +57,7 @@ const MOBILE_SCREENS = [
   { name: 'payouts', path: '/payouts', as: 'worker' },
   { name: 'leaderboard', path: '/leaderboard', as: 'worker' },
   { name: 'report-person', path: '/report-person/someone?name=Riley', as: 'customer' },
+  { name: 'settings', path: '/settings', as: 'worker' },
 ]
 
 const ADMIN_PAGES = [

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Linking, Platform } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Platform } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import * as Location from 'expo-location'
 import type { JobDetail } from '@grassassassin/client'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { displayPrice, displayPayout, formatDeadline, yardSizeLabel } from '@/lib/jobs'
 import { PhotoCapture } from '@/components/photo-capture'
@@ -29,7 +30,7 @@ export default function JobDetailScreen() {
     try {
       setJob(await api.job(id))
     } catch {
-      Alert.alert('Could not load this job', 'It may have been cancelled.')
+      showAlert('Could not load this job', 'It may have been cancelled.')
     } finally {
       setLoading(false)
     }
@@ -47,7 +48,7 @@ export default function JobDetailScreen() {
         : undefined)
 
       if (result.outcome === 'WON') await load()
-      else Alert.alert('Just missed it', result.message, [{ text: 'Back to map', onPress: () => router.back() }])
+      else showAlert('Just missed it', result.message, [{ text: 'Back to map', onPress: () => router.back() }])
     } finally {
       setWorking(false)
     }
@@ -68,7 +69,7 @@ export default function JobDetailScreen() {
       // Surface the server's message: "You need to be within 150m of the
       // property to start work" is genuinely useful; "Something went wrong"
       // is not.
-      Alert.alert('Could not update', error instanceof Error ? error.message : 'Please try again.')
+      showAlert('Could not update', error instanceof Error ? error.message : 'Please try again.')
     } finally {
       setWorking(false)
     }

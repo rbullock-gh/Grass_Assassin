@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Image,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Image,
 } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import type { JobDetail } from '@grassassassin/client'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { displayMoney, displayPrice, formatDeadline } from '@/lib/jobs'
@@ -37,7 +38,7 @@ export default function CustomerJobScreen() {
     try {
       setJob(await api.job(id))
     } catch {
-      Alert.alert('Could not load this job', 'Check your connection and try again.')
+      showAlert('Could not load this job', 'Check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -53,7 +54,7 @@ export default function CustomerJobScreen() {
     } catch (error) {
       // The server's message is the useful one: "You can set up recurring
       // service once this job is complete" beats "Something went wrong".
-      Alert.alert(failureTitle, error instanceof Error ? error.message : 'Please try again.')
+      showAlert(failureTitle, error instanceof Error ? error.message : 'Please try again.')
     } finally {
       setBusy(false)
     }
@@ -61,7 +62,7 @@ export default function CustomerJobScreen() {
 
   const approve = useCallback(() => {
     if (!job) return
-    Alert.alert(
+    showAlert(
       'Approve this work?',
       `Your pro will be paid ${displayMoney(job.workerPayoutCents)}. You can still leave a rating afterwards.`,
       [
@@ -87,7 +88,7 @@ export default function CustomerJobScreen() {
     try {
       preview = await api.cancellationPreview(job.id)
     } catch {
-      Alert.alert('Could not check', 'Please try again.')
+      showAlert('Could not check', 'Please try again.')
       return
     }
 
@@ -96,7 +97,7 @@ export default function CustomerJobScreen() {
       ? ` Your pro keeps ${displayMoney(preview.workerCompensationCents)} for the time they already committed.`
       : ''
 
-    Alert.alert(
+    showAlert(
       'Cancel this job?',
       `You will be refunded ${refund}.${toWorker}`,
       [
@@ -130,7 +131,7 @@ export default function CustomerJobScreen() {
     if (!job || amountCents === 0) return
     // Confirmed, because this moves money. An accidental tap that charges a
     // card is how an app earns a chargeback and a one-star review at once.
-    Alert.alert(
+    showAlert(
       `Send a ${displayMoney(amountCents)} tip?`,
       `${job.worker?.firstName ?? 'Your pro'} keeps all of it — we take nothing from tips.`,
       [
@@ -142,7 +143,7 @@ export default function CustomerJobScreen() {
 
   const makeRecurring = useCallback(() => {
     if (!job) return
-    Alert.alert(
+    showAlert(
       'Set up regular service?',
       `We will book ${job.worker?.firstName ?? 'a pro'} for this again automatically. You can change or stop it any time.`,
       [

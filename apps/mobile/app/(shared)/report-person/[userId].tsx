@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform, Switch,
+  View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Switch,
 } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import type { ReportCategory } from '@grassassassin/shared'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
@@ -54,9 +54,9 @@ export default function ReportPersonScreen() {
         alsoBlock,
         ...(jobId ? { jobId } : {}),
       })
-      Alert.alert('Thank you', result.message, [{ text: 'OK', onPress: () => router.back() }])
+      showAlert('Thank you', result.message, [{ text: 'OK', onPress: () => router.back() }])
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'Could not send that',
         error instanceof Error ? error.message : 'Please try again.',
       )

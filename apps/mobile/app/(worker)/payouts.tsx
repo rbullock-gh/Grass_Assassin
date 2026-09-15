@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl,
-  Pressable, Alert, Linking,
+  Pressable, Linking,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import type { PayoutReadiness, PayoutRecord } from '@grassassassin/client'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useColors, space, radius, textStyles } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { displayMoney } from '@/lib/jobs'
@@ -74,7 +75,7 @@ export default function PayoutsScreen() {
     if (!status) return
     const amount = displayMoney(status.availableBalanceCents)
 
-    Alert.alert(
+    showAlert(
       `Withdraw ${amount}?`,
       'This sends everything available to your bank. It usually lands in two business days.',
       [
@@ -87,7 +88,7 @@ export default function PayoutsScreen() {
               try {
                 const result = await api.withdraw()
                 setError(null)
-                Alert.alert(
+                showAlert(
                   'On its way',
                   `${displayMoney(result.amountCents)} is heading to your bank. ${describeArrival(result.arrivalDate)}`,
                 )

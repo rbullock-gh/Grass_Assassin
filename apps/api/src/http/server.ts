@@ -23,6 +23,7 @@ import { registerAdminRoutes } from './routes/admin.js'
 import { registerBillingRoutes } from './routes/billing.js'
 import { registerDeviceRoutes } from './routes/devices.js'
 import { registerSafetyRoutes } from './routes/safety.js'
+import { registerPreferenceRoutes } from './routes/preferences.js'
 import type { PushSender } from '../modules/notifications/notifier.js'
 import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
 
@@ -306,6 +307,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerBillingRoutes(instance, deps)
     await registerDeviceRoutes(instance, deps)
     await registerSafetyRoutes(instance, deps)
+    await registerPreferenceRoutes(instance, deps)
   }, { prefix: '/v1' })
 
   // Outside /v1 on purpose: this stands in for S3, which is not part of our

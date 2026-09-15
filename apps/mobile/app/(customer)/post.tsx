@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import type { Category, PropertySummary, PriceGuidance } from '@grassassassin/client'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import {
@@ -52,7 +53,7 @@ export default function PostJobScreen() {
           setDraft((current) => ({ ...current, propertyId: propertyResult.properties[0]!.id }))
         }
       })
-      .catch(() => Alert.alert('Could not load', 'Check your connection and try again.'))
+      .catch(() => showAlert('Could not load', 'Check your connection and try again.'))
   }, [])
 
   // Guidance depends on both category and yard size, so it refreshes when
@@ -110,7 +111,7 @@ export default function PostJobScreen() {
       // customer enriches it while pros are already seeing it.
       router.replace(`/(customer)/jobs/${job.id}`)
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'Could not post your job',
         error instanceof Error ? error.message : 'Please try again.',
       )

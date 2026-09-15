@@ -501,6 +501,28 @@ export class GrassAssassinClient {
   unblockUser(userId: string) {
     return this.request<void>('DELETE', `/v1/blocks/${userId}`)
   }
+
+  // --- notification preferences --------------------------------------------
+
+  notificationPreferences() {
+    return this.request<{ groups: NotificationGroupState[] }>('GET', '/v1/notification-preferences')
+  }
+
+  /** Groups not mentioned are left as they were. */
+  setNotificationPreferences(groups: Record<string, boolean>) {
+    return this.request<{ groups: Array<{ key: string; enabled: boolean }> }>(
+      'PUT', '/v1/notification-preferences', { body: { groups } },
+    )
+  }
+}
+
+export interface NotificationGroupState {
+  key: string
+  label: string
+  detail: string
+  /** What you stop hearing about, when turning it off costs something. */
+  cost: string | null
+  enabled: boolean
 }
 
 export interface ReportFiled {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Alert, RefreshControl,
+  View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, RefreshControl,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -9,6 +9,7 @@ import type { LatLng } from '@grassassassin/shared'
 import { progressToNextRank, RANKS } from '@grassassassin/shared'
 import type { Category, MapJob } from '@grassassassin/client'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
@@ -138,7 +139,7 @@ export default function WorkerMapScreen() {
       const result = await api.claimJob(job.id, location ?? undefined)
 
       if (result.outcome === 'WON') {
-        Alert.alert(
+        showAlert(
           "It's yours",
           `${job.categoryName} for ${displayPayout(job.workerPayoutCents)}. The address is unlocked on the job screen.`,
           [{ text: 'Open job', onPress: () => router.push(`/(worker)/job/${job.id}`) }],
@@ -147,11 +148,11 @@ export default function WorkerMapScreen() {
       } else {
         // Losing a race is the expected outcome for most workers most of the
         // time. It is phrased as information, never as an error.
-        Alert.alert('Just missed it', result.message)
+        showAlert('Just missed it', result.message)
         await refetch()
       }
     } catch {
-      Alert.alert('Could not claim', 'Check your connection and try again.')
+      showAlert('Could not claim', 'Check your connection and try again.')
     } finally {
       setClaimingId(null)
     }
@@ -197,6 +198,14 @@ export default function WorkerMapScreen() {
           style={[styles.filterButton, { backgroundColor: c.surface, borderColor: c.border }]}
         >
           <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '700' }}>Ranks</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/(shared)/settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          style={[styles.filterButton, { backgroundColor: c.surface, borderColor: c.border }]}
+        >
+          <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '700' }}>Settings</Text>
         </Pressable>
         <Pressable
           onPress={() => setFiltersOpen(true)}

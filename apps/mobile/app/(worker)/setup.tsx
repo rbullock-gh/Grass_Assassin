@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert,
-} from 'react-native'
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import * as Location from 'expo-location'
 import type { Category, Equipment } from '@grassassassin/client'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
@@ -44,7 +44,7 @@ export default function WorkerSetupScreen() {
         setCategories(categoryResult.categories)
         setEquipment(equipmentResult.equipment)
       })
-      .catch(() => Alert.alert('Could not load', 'Check your connection and try again.'))
+      .catch(() => showAlert('Could not load', 'Check your connection and try again.'))
   }, [])
 
   const validation = validateSetupStep(step, setup)
@@ -81,7 +81,7 @@ export default function WorkerSetupScreen() {
       await refresh()
       router.replace('/(worker)/map')
     } catch (error) {
-      Alert.alert('Could not save', error instanceof Error ? error.message : 'Please try again.')
+      showAlert('Could not save', error instanceof Error ? error.message : 'Please try again.')
     } finally {
       setSaving(false)
     }

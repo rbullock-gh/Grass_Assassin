@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { router } from 'expo-router'
 import * as Location from 'expo-location'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import { YARD_SIZE_LABELS, type YardSize } from '@/lib/post-flow'
@@ -49,7 +49,7 @@ export default function NewPropertyScreen() {
     try {
       const location = await resolveLocation(draft)
       if (!location) {
-        Alert.alert(
+        showAlert(
           'We could not find that address',
           'Check the street and postcode, or move to the property and tap "Use my current location".',
         )
@@ -73,7 +73,7 @@ export default function NewPropertyScreen() {
       // Includes OUTSIDE_SERVICE_AREA, which is a real answer rather than a
       // failure — telling someone we are not live near them beats letting them
       // post onto an empty map.
-      Alert.alert('Could not save', error instanceof Error ? error.message : 'Please try again.')
+      showAlert('Could not save', error instanceof Error ? error.message : 'Please try again.')
     } finally {
       setSaving(false)
     }
@@ -82,7 +82,7 @@ export default function NewPropertyScreen() {
   const useCurrentLocation = useCallback(async () => {
     const permission = await Location.requestForegroundPermissionsAsync()
     if (permission.status !== 'granted') {
-      Alert.alert('Location is off', 'Enable location access, or type the address instead.')
+      showAlert('Location is off', 'Enable location access, or type the address instead.')
       return
     }
     const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
@@ -91,7 +91,7 @@ export default function NewPropertyScreen() {
       longitude: position.coords.longitude,
     })
     if (!place) {
-      Alert.alert('No address found here', 'Type it in instead.')
+      showAlert('No address found here', 'Type it in instead.')
       return
     }
     patch({

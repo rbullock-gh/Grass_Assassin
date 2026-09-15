@@ -103,6 +103,9 @@ async function main() {
     // from disputing a job. The subject id is only used on submit — the screen
     // fetches nothing — so any id renders the same thing.
     { name: 'report-person', path: '/report-person/someone?name=Riley', as: customer },
+    // Where sign-out lives. Before this screen existed there was no way out of
+    // the app at all.
+    { name: 'settings', path: '/settings', as: worker },
   ].filter(Boolean)
 
   const browser = await launchChromium()

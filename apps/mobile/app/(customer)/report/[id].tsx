@@ -1,13 +1,13 @@
 import { useCallback, useState } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import {
   DISPUTE_REASONS, validateDispute, MAX_DISPUTE_DESCRIPTION, type DisputeReason,
 } from '@grassassassin/shared'
 import { api } from '@/lib/api'
+import { showAlert } from '@/lib/dialog'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 
@@ -40,7 +40,7 @@ export default function ReportProblemScreen() {
     setSubmitting(true)
     try {
       const result = await api.disputeJob(id, { reason: reason!, description: description.trim() })
-      Alert.alert(
+      showAlert(
         'Reported',
         // The server writes this, so the urgent path says so rather than
         // giving everyone the same reassurance.
@@ -48,7 +48,7 @@ export default function ReportProblemScreen() {
         [{ text: 'OK', onPress: () => router.replace(`/(customer)/jobs/${id}`) }],
       )
     } catch (error) {
-      Alert.alert('Could not report', error instanceof Error ? error.message : 'Please try again.')
+      showAlert('Could not report', error instanceof Error ? error.message : 'Please try again.')
     } finally {
       setSubmitting(false)
     }
