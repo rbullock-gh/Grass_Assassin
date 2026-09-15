@@ -122,6 +122,10 @@ model Device {
   pushToken   String   @unique
   platform    String   // ios | android | web
   appVersion  String?
+  /// Minutes to subtract from UTC for local time, as getTimezoneOffset() gives
+  /// it. Quiet hours assumed US Central for everybody before this existed,
+  /// which is a 3am push to anyone who moved.
+  tzOffsetMinutes Int?
   lastSeenAt  DateTime @default(now())
   createdAt   DateTime @default(now())
 

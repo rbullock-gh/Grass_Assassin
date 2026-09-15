@@ -21,6 +21,7 @@ import { registerMessageRoutes } from './routes/messages.js'
 import { registerDevStorageRoutes } from './routes/dev-storage.js'
 import { registerAdminRoutes } from './routes/admin.js'
 import { registerBillingRoutes } from './routes/billing.js'
+import { registerDeviceRoutes } from './routes/devices.js'
 import type { PushSender } from '../modules/notifications/notifier.js'
 import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
 
@@ -35,6 +36,7 @@ export interface RateLimitSettings {
 declare module 'fastify' {
   interface FastifyInstance {
     rateLimits: RateLimitSettings
+    routeManifest: RouteRecord[]
   }
 }
 
@@ -82,6 +84,12 @@ const DEFAULT_RATE_LIMITS = {
   loginMax: 10,
   claimMax: 30,
 } as const
+
+/** One registered route. Used by the suite that proves each one is protected. */
+export interface RouteRecord {
+  method: string
+  url: string
+}
 
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const resolved: ServerDeps & { storage: StorageProvider } = {
@@ -136,6 +144,24 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     // the load balancer's, which would rate-limit every user as one.
     trustProxy: true,
   })
+
+  /*
+   * Every route this server ends up serving, recorded as it is registered.
+   *
+   * Registered before anything else so it catches all of them. It exists so
+   * that "does every route that should require a token actually require one"
+   * can be asked of the server rather than of a hand-written list — the list
+   * version silently passed the day /v1/devices was added, because nobody
+   * remembered to add it, which is exactly how a route ships unprotected.
+   */
+  const routeManifest: RouteRecord[] = []
+  app.addHook('onRoute', (route) => {
+    for (const method of [route.method].flat()) {
+      if (method === 'HEAD' || method === 'OPTIONS') continue
+      routeManifest.push({ method, url: route.url })
+    }
+  })
+  app.decorate('routeManifest', routeManifest)
 
   await app.register(helmet, { contentSecurityPolicy: false })
   await app.register(cors, {
@@ -251,6 +277,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerMessageRoutes(instance, deps)
     await registerAdminRoutes(instance, deps)
     await registerBillingRoutes(instance, deps)
+    await registerDeviceRoutes(instance, deps)
   }, { prefix: '/v1' })
 
   // Outside /v1 on purpose: this stands in for S3, which is not part of our

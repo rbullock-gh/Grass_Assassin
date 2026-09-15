@@ -437,6 +437,31 @@ export class GrassAssassinClient {
   withdraw(amountCents?: number) {
     return this.request<Withdrawal>('POST', '/v1/worker/payouts', { body: { amountCents } })
   }
+
+  // --- devices -------------------------------------------------------------
+
+  /**
+   * Points push notifications at this phone.
+   *
+   * The timezone offset travels with the token because quiet hours are decided
+   * server-side, and a server that does not know where someone is has to guess.
+   * It guessed US Central for everybody.
+   */
+  registerDevice(input: {
+    pushToken: string
+    platform: 'ios' | 'android' | 'web'
+    appVersion?: string
+    tzOffsetMinutes?: number
+  }) {
+    return this.request<{ device: { id: string; platform: string; lastSeenAt: string } }>(
+      'POST', '/v1/devices', { body: input },
+    )
+  }
+
+  /** Stops push to this phone. Called on sign-out, so the next person does not get their alerts. */
+  deregisterDevice(pushToken: string) {
+    return this.request<void>('DELETE', '/v1/devices', { body: { pushToken } })
+  }
 }
 
 // --- response shapes -------------------------------------------------------

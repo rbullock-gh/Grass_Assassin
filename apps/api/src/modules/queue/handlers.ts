@@ -28,6 +28,17 @@ import { metersToMiles, periodBoundsFor } from '@grassassassin/shared'
 export interface AutomationDeps extends SettlementDeps {
   queue: Queue
   notifier: Notifier
+  /**
+   * Set when push delivery is real. The recording sender has no receipts to
+   * collect, so the sweep simply does not register — rather than registering a
+   * handler that quietly does nothing every five minutes.
+   */
+  receipts?: ReceiptCollector
+}
+
+/** The part of a push sender that has receipts to chase. */
+export interface ReceiptCollector {
+  collectReceipts(): Promise<{ ok: number; failed: number; pruned: number }>
 }
 
 export function registerHandlers(deps: AutomationDeps): void {
@@ -49,6 +60,10 @@ export function registerHandlers(deps: AutomationDeps): void {
   queue.on('recompute.leaderboards', () => discard(onRecomputeLeaderboards(deps)))
   queue.on('recompute.premium-flags', () => discard(onRefreshPremiumFlags(deps)))
   queue.on('recurring.generate', () => discard(onGenerateRecurringJobs(deps)))
+  if (deps.receipts) {
+    const receipts = deps.receipts
+    queue.on('push.collect-receipts', () => discard(receipts.collectReceipts()))
+  }
 }
 
 export async function registerSchedules(queue: Queue): Promise<void> {

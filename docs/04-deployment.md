@@ -79,6 +79,24 @@ the API also requires the acting administrator's id and verifies that person
 really is an active administrator, so a leaked token cannot act as an arbitrary
 user.
 
+### Push
+
+`PUSH_ENABLED=true` is what makes notifications leave the building. Without it
+the API records every notification in the `notifications` table with a delivery
+result and sends nothing — which is the right behaviour for a staging copy of
+production data, and a silent disaster if it is what production is running. The
+boot log says which mode it is in, and says so loudly in production.
+
+`EXPO_ACCESS_TOKEN` is separate: Expo accepts unauthenticated sends until a
+project turns on push security, at which point every send without the token
+fails. Set it before you need it.
+
+Dead tokens are pruned automatically. A phone that has been reinstalled answers
+`DeviceNotRegistered`, usually in the receipt rather than the ticket, and the
+`push.collect-receipts` sweep deletes the row. Transient errors — rate limits,
+Expo outages — never delete anything, because silently unsubscribing a real user
+is not recoverable from their side.
+
 ## The first administrator
 
 The dashboard has no shared password and no bootstrap account. Make one:

@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useColorScheme } from 'react-native'
 import { AuthProvider } from '@/lib/auth'
+import { PushProvider } from '@/lib/push-provider'
 import { colorsFor } from '@/lib/theme'
 
 export default function RootLayout() {
@@ -14,6 +15,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
+          {/* Inside AuthProvider: which screen a tapped notification opens
+              depends on whether the person holding the phone is the worker or
+              the customer on that job. */}
+          <PushProvider>
           <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
           <Stack
             screenOptions={{
@@ -51,6 +56,7 @@ export default function RootLayout() {
             <Stack.Screen name="(shared)/messages/index" options={{ title: 'Messages' }} />
             <Stack.Screen name="(shared)/messages/[jobId]" options={{ title: 'Messages' }} />
           </Stack>
+          </PushProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

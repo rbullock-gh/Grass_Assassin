@@ -28,6 +28,18 @@ const envSchema = z.object({
   MAPBOX_ACCESS_TOKEN: z.string().optional(),
   GOOGLE_MAPS_API_KEY: z.string().optional(),
   REDIS_URL: z.string().optional(),
+
+  /**
+   * Push delivery through Expo.
+   *
+   * PUSH_ENABLED is separate from the access token on purpose: Expo accepts
+   * unauthenticated sends until a project turns on push security, so "we have a
+   * token" is not the same question as "should this process send". A staging
+   * copy of production data with push on is how a customer gets a notification
+   * about a job that does not exist.
+   */
+  PUSH_ENABLED: z.enum(['true', 'false']).default('false'),
+  EXPO_ACCESS_TOKEN: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

@@ -156,4 +156,81 @@ describe('every route requires the authentication it should', () => {
       expect(response.statusCode).toBe(200)
     })
   }
+
+  /**
+   * The same question, asked of the server instead of the list above.
+   *
+   * The list is readable and worth keeping, and it is also the kind of thing
+   * people forget: /v1/devices was added, shipped and tested without anyone
+   * adding it here, and the suite stayed green. This walks every route the
+   * server actually registered and requires each one to be either in the
+   * public allowlist below or to refuse an anonymous caller — so forgetting is
+   * a failure rather than a silence.
+   */
+  const PUBLIC_BY_DESIGN = new Set([
+    'GET /health',
+    'GET /v1/categories',
+    'GET /v1/equipment',
+    'GET /v1/leaderboard',
+    'GET /v1/workers/:id',
+    // Sign-up, sign-in and token refresh cannot require a token.
+    'POST /v1/auth/register',
+    'POST /v1/auth/login',
+    'POST /v1/auth/refresh',
+    'POST /v1/auth/logout',
+    // Signed with Stripe's own secret and verified in the handler; a bearer
+    // token is not a thing Stripe has.
+    'POST /v1/webhooks/stripe',
+    // Guarded by a service token plus an acting-admin lookup, not a user JWT.
+    'POST /v1/admin/disputes/:id/resolve',
+    /*
+     * Deliberately public, decided when this check first surfaced it.
+     *
+     * It answers "what does a mow cost around here" from category averages and
+     * a lot-size multiplier — the same data /v1/categories already serves to
+     * anyone. Someone deciding whether to sign up should be able to ask, and
+     * there is no personal data in the answer.
+     */
+    'GET /v1/jobs/price-guidance',
+    /*
+     * Development only — the module refuses to register against real storage
+     * and against isProduction, so these do not exist in production at all.
+     * They authenticate with the presigned signature the upload was granted,
+     * not with a user's token, which is exactly what S3 does.
+     */
+    'PUT /dev-storage/*',
+    'GET /dev-storage/*',
+  ])
+
+  it('leaves no route both unlisted and unprotected', async () => {
+    const unprotected: string[] = []
+
+    for (const route of app.routeManifest) {
+      const key = `${route.method} ${route.url}`
+      if (PUBLIC_BY_DESIGN.has(key)) continue
+      if (route.url === '*') continue
+
+      // A concrete value for every parameter, so the request reaches a handler
+      // rather than failing to route.
+      const url = route.url.replace(/:[A-Za-z0-9_]+/g, 'anything')
+      const response = await app.inject({
+        method: route.method as 'GET',
+        url,
+        ...(route.method === 'GET' || route.method === 'DELETE' ? {} : { payload: {} }),
+      })
+
+      // 401 is the point. 400 would mean validation ran before the auth check,
+      // which leaks whether a body shape is right to an anonymous caller — and
+      // 404 on a route that exists means it never reached requireIdentity.
+      if (response.statusCode !== 401) {
+        unprotected.push(`${key} → ${response.statusCode}`)
+      }
+    }
+
+    expect(
+      unprotected,
+      'These routes answered an anonymous caller with something other than 401. ' +
+      'Either add requireIdentity, or add them to PUBLIC_BY_DESIGN with a reason.',
+    ).toEqual([])
+  })
 })

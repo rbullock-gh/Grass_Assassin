@@ -26,6 +26,15 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
 
   // --- pricing guidance, before the job exists ---------------------------
 
+  /*
+   * Public on purpose, and the only route under /jobs that is.
+   *
+   * It answers "roughly what does this cost" from category averages and a
+   * lot-size multiplier. Someone weighing up whether to sign up should be able
+   * to ask that, and the answer contains nobody's data — the same figures
+   * /v1/categories already hands out. Anything here that starts reading a
+   * specific customer's or property's data needs requireIdentity first.
+   */
   app.get<{ Querystring: { categoryId?: string; yardSize?: string } }>('/jobs/price-guidance', async (request) => {
     const query = z.object({
       categoryId: z.string().min(1),

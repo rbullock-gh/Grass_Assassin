@@ -47,9 +47,15 @@ EAS build pipeline, staging + production environments, monitoring, runbooks, leg
 
 Done so far: a security review of the branch, admin authentication with per-request
 revocation and sign-in throttling, container images and a compose stack for the whole
-system (`docs/04-deployment.md`), and CI that renders every screen and drives the admin's
-locks. Not started: load testing, accessibility audit, EAS pipeline, monitoring, runbooks,
-and everything legal — which is the item most likely to actually gate a launch.
+system (`docs/04-deployment.md`), CI that renders every screen and drives the admin's
+locks, a load test of the claim race and the map with numbers written down
+(`docs/04-deployment.md`), and an accessibility audit that measures what is actually
+painted — both apps are at zero findings and the audit runs in CI.
+
+Not started: the EAS build pipeline, monitoring, runbooks, and everything legal
+— worker classification, insurance, ToS, privacy policy. Legal is the item most
+likely to actually gate a launch, and it is the one item on this list that no
+amount of engineering closes.
 
 ---
 

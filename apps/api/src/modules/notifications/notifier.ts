@@ -92,6 +92,9 @@ export function mayDeliverNow(type: NotificationType, now: Date, tzOffsetMinutes
  */
 export const MAX_JOB_MATCH_PUSHES_PER_DAY = 12
 
+/** US Central, the launch market. Used only when a device has not said. */
+export const DEFAULT_TZ_OFFSET_MINUTES = 360
+
 export interface NotifyParams {
   userId: string
   type: NotificationType
@@ -197,10 +200,23 @@ export class Notifier {
     return preference?.push ?? true
   }
 
-  private async tzOffsetFor(_userId: string): Promise<number> {
-    // Until devices report their offset, assume US Central — the launch market.
-    // Getting this wrong only ever delays a push; it never sends one at 3am to
-    // someone in the launch market, which is what matters.
-    return 360
+  /**
+   * The offset the user's most recent device reported, or the launch market.
+   *
+   * This used to return 360 unconditionally. Every user in the system was
+   * assumed to be in US Central, so quiet hours were correct for Nashville and
+   * a 3am push for anyone who had moved. Devices report their offset at
+   * registration now; the fallback stays for rows registered before they did.
+   *
+   * Most recent, not first: a worker who drives to another state carries their
+   * phone, and the phone knows.
+   */
+  private async tzOffsetFor(userId: string): Promise<number> {
+    const device = await this.db.device.findFirst({
+      where: { userId, tzOffsetMinutes: { not: null } },
+      orderBy: { lastSeenAt: 'desc' },
+      select: { tzOffsetMinutes: true },
+    })
+    return device?.tzOffsetMinutes ?? DEFAULT_TZ_OFFSET_MINUTES
   }
 }

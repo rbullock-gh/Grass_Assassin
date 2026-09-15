@@ -25,6 +25,7 @@ export type JobName =
   | 'recompute.leaderboards'
   | 'recompute.premium-flags'
   | 'recurring.generate'
+  | 'push.collect-receipts'
 
 export interface JobPayloads {
   'notify.job-posted': { jobId: string }
@@ -34,6 +35,7 @@ export interface JobPayloads {
   'sweep.auto-approve': Record<string, never>
   'sweep.expire-jobs': Record<string, never>
   'recompute.reputation': { workerUserId: string }
+  'push.collect-receipts': Record<string, never>
   'recompute.leaderboards': Record<string, never>
   'recompute.premium-flags': Record<string, never>
   'recurring.generate': Record<string, never>
@@ -163,4 +165,11 @@ export const SCHEDULES: Record<string, { name: JobName; cron: string }> = {
   leaderboards: { name: 'recompute.leaderboards', cron: '*/15 * * * *' },
   premiumFlags: { name: 'recompute.premium-flags', cron: '*/30 * * * *' },
   recurringJobs: { name: 'recurring.generate', cron: '0 * * * *' },
+  /*
+   * Expo's push RECEIPTS, which are the only place most dead tokens show up.
+   * A ticket says Expo took the message; the receipt, some seconds later, says
+   * whether Apple or Google did. Skip this and the devices table fills with
+   * uninstalled phones that every future push pays to fail against.
+   */
+  pushReceipts: { name: 'push.collect-receipts', cron: '*/5 * * * *' },
 }

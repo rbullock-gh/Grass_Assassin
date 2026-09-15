@@ -306,6 +306,39 @@ export const tipSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// Devices
+// ---------------------------------------------------------------------------
+
+/**
+ * Registering a device for push.
+ *
+ * The token shape is checked rather than accepted as any string. An Expo token
+ * is `ExponentPushToken[…]` or `ExpertPushToken[…]`; anything else is either a
+ * bug in the client or somebody probing, and either way sending it to Expo
+ * burns a request to be told what we already knew.
+ */
+export const expoPushTokenSchema = z
+  .string()
+  .regex(/^Ex(ponent|pert)PushToken\[[^\]]+\]$/, 'That is not an Expo push token')
+
+export const registerDeviceSchema = z.object({
+  pushToken: expoPushTokenSchema,
+  platform: z.enum(['ios', 'android', 'web']),
+  appVersion: z.string().max(32).optional(),
+  /**
+   * Minutes to SUBTRACT from UTC to get local time — the sign JavaScript's
+   * getTimezoneOffset() uses, so a client can pass it through unchanged rather
+   * than negating it and getting quiet hours backwards.
+   */
+  tzOffsetMinutes: z.number().int().min(-840).max(840).optional(),
+})
+export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>
+
+export const deregisterDeviceSchema = z.object({
+  pushToken: expoPushTokenSchema,
+})
+
+// ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 

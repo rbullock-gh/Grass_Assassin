@@ -69,6 +69,9 @@ services:
       # Lets the fake storage provider hand out upload URLs a phone on the same
       # network can actually reach.
       PUBLIC_BASE_URL: http://localhost:4000
+      # Off: a local stack should not push to a real phone, and the recording
+      # sender keeps every notification visible in the notifications table.
+      PUSH_ENABLED: 'false'
     ports: ['4000:4000']
     depends_on:
       db: { condition: service_healthy }

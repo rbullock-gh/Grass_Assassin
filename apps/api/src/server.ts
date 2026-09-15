@@ -7,6 +7,7 @@ import { InMemoryQueue } from './modules/queue/queue.js'
 import { BullMqQueue } from './modules/queue/bullmq-queue.js'
 import { registerHandlers, registerSchedules } from './modules/queue/handlers.js'
 import { Notifier, RecordingPushSender } from './modules/notifications/notifier.js'
+import { ExpoPushSender } from './modules/notifications/expo-push.js'
 import type { Queue } from './modules/queue/queue.js'
 
 /**
@@ -44,13 +45,39 @@ async function main() {
     }
   }
 
-  const notifier = new Notifier(prisma, new RecordingPushSender())
-  registerHandlers({ db: prisma, provider, queue, notifier })
+  /*
+   * Real push, or a diary.
+   *
+   * This line said `new RecordingPushSender()` unconditionally, in production
+   * too. Every notification the product sends — a job matched, a worker is on
+   * the way, your money is released — was written to the notifications table
+   * with sentAt set and then dropped on the floor. The system looked healthy
+   * from the database and delivered nothing.
+   */
+  const pushEnabled = env.PUSH_ENABLED === 'true'
+  const push = pushEnabled
+    ? new ExpoPushSender({ accessToken: env.EXPO_ACCESS_TOKEN, db: prisma })
+    : new RecordingPushSender()
+
+  if (!pushEnabled) {
+    console.warn(
+      env.NODE_ENV === 'production'
+        ? '⚠️  PUSH_ENABLED is not true — notifications will be recorded and NOT delivered.'
+        : '⚠️  No push delivery — notifications are recorded only. Set PUSH_ENABLED=true to send.',
+    )
+  }
+
+  const notifier = new Notifier(prisma, push)
+  registerHandlers({
+    db: prisma, provider, queue, notifier,
+    ...(push instanceof ExpoPushSender ? { receipts: push } : {}),
+  })
   await registerSchedules(queue)
 
   const app = await buildServer({
     db: prisma,
     provider,
+    push,
     config: {
       accessSecret: env.JWT_ACCESS_SECRET,
       accessTtlSeconds: env.ACCESS_TOKEN_TTL_SECONDS,
