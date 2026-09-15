@@ -14,18 +14,19 @@ See `docs/03-roadmap-and-team.md`.
 
 | | |
 |---|---|
-| Tests passing | **687** (123 domain · 327 API · 169 mobile · 31 design · 19 client · 18 admin) |
+| Tests passing | **759** (144 domain · 327 API · 214 mobile · 37 design · 19 client · 18 admin) |
 | Database | PostgreSQL 16 + PostGIS 3.4 · 48 tables · 6 GIST indexes · 18 CHECK constraints |
 | CI | green — typecheck, full suite against real PostGIS, structural migration-drift check, and an end-to-end smoke run against a live server |
-| Verified end to end | post → search → claim → work → approve → pay → points → rate → tip → recurring, over real HTTP |
+| Verified end to end | post → search → claim → message → photo upload → geofenced start → complete → approve → pay → points → rate → tip → recurring, over real HTTP |
+| Verified operationally | an admin changed the commission in the dashboard and the next job priced differently — no deploy, no restart |
 | Verified visually | admin dashboard rendered in Chromium, light + dark + 390px mobile, zero console errors |
 | Verified visually (mobile) | every screen rendered in Chromium via the Expo web build — 60 screen × viewport × theme combinations (phone, Fold width, tablet, desktop; light and dark), signed in against the live API, with zero console errors, zero page errors, zero horizontal overflow and no unmatched routes |
 | **Not verified** | the Stripe adapter (no credentials here), push delivery, device geocoding, and **native behaviour on a real iOS/Android device** — the app bundles and renders, but React Native Web is not the same runtime as a phone, so gestures, maps, the camera and SecureStore remain unproven |
 
-Mobile app surfaces: worker map with all seven filters, job detail, claim,
-earnings, public pro profile, leaderboards, customer home, five-step post flow,
-job tracking with approve/tip/rate/recurring, add property, in-app messaging,
-and the signed-out flow.
+Mobile app surfaces: worker onboarding, map with all seven filters, job detail,
+claim, before/after photo capture, earnings, public pro profile, leaderboards,
+customer home, five-step post flow, job tracking with approve/tip/rate/recurring,
+listing photos, add property, in-app messaging, and the signed-out flow.
 
 The full loop has been executed against a running server, not just unit-tested:
 a customer posts a job, a worker finds it on the map, claims it, the second
