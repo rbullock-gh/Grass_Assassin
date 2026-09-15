@@ -437,13 +437,26 @@ const styles = StyleSheet.create({
   // Wraps rather than squeezing: four items in a space-between row collapse
   // the job count to two characters on a narrow phone.
   listHeadRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], flexWrap: 'wrap' },
+  /**
+   * Everything tappable here is minTouchTarget tall, not the 34px and 30px
+   * these were.
+   *
+   * This is a map a worker uses standing in a driveway, one-handed, often
+   * wearing work gloves — a 30px sort chip is a missed tap, and a missed tap on
+   * this screen is a job that went to someone else. The pills look chunkier
+   * than a desk-designed chip row; that is the correct trade for the person
+   * actually using it.
+   */
   filterButton: {
-    minHeight: 34, borderWidth: 1, borderRadius: radius.full,
+    minHeight: minTouchTarget, borderWidth: 1, borderRadius: radius.full,
     paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center',
   },
-  clearButton: { minHeight: 32, justifyContent: 'center' },
-  chipRow: { gap: space[2], paddingVertical: space[1] },
-  chip: { paddingHorizontal: space[3], paddingVertical: 7, borderRadius: radius.full, borderWidth: 1 },
+  clearButton: { minHeight: minTouchTarget, justifyContent: 'center' },
+  chipRow: { gap: space[2], paddingVertical: space[1], alignItems: 'center' },
+  chip: {
+    paddingHorizontal: space[4], minHeight: minTouchTarget, borderRadius: radius.full,
+    borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+  },
   listContent: { paddingHorizontal: space[4] },
   empty: { padding: space[8], alignItems: 'center', gap: space[2] },
   emptyTitle: { ...textStyles.subheading, textAlign: 'center' },

@@ -12,14 +12,42 @@
   --surface-2: #E7EDE6;
   --ink: #0B1410;
   --ink-2: #4A5A50;
-  --ink-3: #77887E;
+  /*
+   * #77887E measured 3.75:1 on white and 3.15:1 on --surface-2 — below AA, and
+   * it is the colour of every table header, every metric caption and every
+   * timestamp on this dashboard. Matched to the design system's textTertiary,
+   * which was corrected for the same reason.
+   */
+  --ink-3: #566B5F;
   --line: #D3DDD4;
   --line-2: #BCC9BD;
   --brand: #0C682F;
   --brand-bright: #16A34A;
+  /*
+   * What text sits on a --brand fill. It is NOT always white: in dark mode
+   * --brand lifts to #39C26F so it reads on a dark ground, and white on that is
+   * 2.30:1 — the "Save changes" and "Resolve and settle" buttons, the two
+   * controls in this dashboard that move real money, were the least readable
+   * things on their screens.
+   */
+  --on-brand: #FFFFFF;
+  /*
+   * Hover DARKENS in light mode. --brand-bright is #16A34A, and white on that
+   * is 3.30:1 — so every primary button in this dashboard became harder to read
+   * the moment the pointer landed on it, which is the one moment it is being
+   * read. (Found by accident: the audit's own click left the pointer resting on
+   * the sign-in button, and the next pass measured the hover state.)
+   */
+  --brand-hover: #0A5227;
   --brand-wash: #E4F4E9;
   --gold: #8F6605;
   --gold-wash: #F7EDD4;
+  /*
+   * --gold ON --gold-wash is 4.43:1 at the 11px a rank chip is set in — close
+   * enough to look fine and still a fail. The chip needs its own darker ink;
+   * --gold stays as it is for larger, non-text uses.
+   */
+  --gold-ink: #7A5704;
   --danger: #B4232C;
   --danger-wash: #FBE4E5;
   --warn: #8A5A06;
@@ -42,9 +70,13 @@
     --line-2: #33443A;
     --brand: #39C26F;
     --brand-bright: #69D894;
+    /* Inverted in dark: the ground is dark, so hover lifts rather than sinks. */
+    --brand-hover: #69D894;
+    --on-brand: #06120B;
     --brand-wash: rgba(57,194,111,.13);
     --gold: #EBB833;
     --gold-wash: rgba(217,162,27,.15);
+    --gold-ink: #EBB833;
     --danger: #F08A8F;
     --danger-wash: rgba(220,38,38,.17);
     --warn: #E0A93B;
@@ -100,9 +132,14 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink-3); padding: 10px 8px 4px;
 }
 @media (max-width: 900px) { .nav-label { display: none; } }
+/*
+ * 44px, not the 38px these were. The dashboard is mostly driven with a mouse,
+ * but "mostly" is not "only" — this is also opened on a tablet on a Sunday, and
+ * a 38px target is under the minimum whatever is pointing at it.
+ */
 .nav a {
   padding: 8px 10px; border-radius: 7px; font-weight: 500; color: var(--ink-2);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; min-height: 44px;
 }
 .nav a:hover { background: var(--surface-2); color: var(--ink); }
 .nav a[aria-current="page"] { background: var(--brand-wash); color: var(--brand); font-weight: 600; }
@@ -179,7 +216,7 @@ td.strong { font-weight: 600; }
 
 .rank-chip {
   display: inline-block; padding: 1px 7px; border-radius: 5px;
-  font-size: 11px; font-weight: 600; background: var(--gold-wash); color: var(--gold);
+  font-size: 11px; font-weight: 600; background: var(--gold-wash); color: var(--gold-ink);
 }
 
 /* ---- bar chart ---- */
@@ -292,7 +329,7 @@ td.strong { font-weight: 600; }
   background: var(--surface);
   color: var(--ink);
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .config-scope select:focus-visible,
@@ -353,16 +390,16 @@ td.strong { font-weight: 600; }
   font: inherit;
   font-size: 14px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--on-brand);
   background: var(--brand);
   border: 0;
   border-radius: 7px;
   padding: 10px 20px;
-  min-height: 40px;
+  min-height: 44px;
   cursor: pointer;
 }
 
-.config-actions button:hover:not(:disabled) { background: var(--brand-bright); }
+.config-actions button:hover:not(:disabled) { background: var(--brand-hover); }
 .config-actions button:disabled { opacity: .6; cursor: default; }
 .config-actions button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
@@ -427,7 +464,7 @@ td.strong { font-weight: 600; }
   font: inherit;
   font-size: 15px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--on-brand);
   background: var(--brand);
   border: 0;
   border-radius: 7px;
@@ -437,7 +474,7 @@ td.strong { font-weight: 600; }
   cursor: pointer;
 }
 
-.signin button:hover { background: var(--brand-bright); }
+.signin button:hover { background: var(--brand-hover); }
 .signin button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* Says plainly when the dashboard is running without a password. */
@@ -451,21 +488,32 @@ td.strong { font-weight: 600; }
 }
 
 /* ---- Signed-in identity, sidebar footer ---- */
+/*
+ * Theme tokens, not white overlays.
+ *
+ * This block was written as though the sidebar were dark — every colour here
+ * was an rgba() of white. The sidebar is var(--surface), which is WHITE in
+ * light mode, so in light mode the signed-in admin's name, their email and the
+ * Sign out button were white on white: not faint, invisible. It survived
+ * because the dark theme is what gets looked at while building, and because a
+ * contrast checker that skips semi-transparent text never measured two of the
+ * three.
+ */
 .signed-in {
   padding: 10px 8px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  border-top: 1px solid var(--line);
   margin-bottom: 8px;
 }
 .signed-in-name {
   font-size: 13px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .signed-in-email {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.52);
+  color: var(--ink-3);
   line-height: 1.4;
   margin-bottom: 8px;
   overflow-wrap: anywhere;
@@ -474,14 +522,15 @@ td.strong { font-weight: 600; }
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   padding: 5px 10px;
+  min-height: 44px;
   cursor: pointer;
 }
-.sign-out:hover { background: rgba(255, 255, 255, 0.13); color: #fff; }
+.sign-out:hover { background: var(--line); color: var(--ink); }
 .sign-out:focus-visible { outline: 2px solid var(--brand-bright); outline-offset: 2px; }
 
 /* ---- Dispute resolution ---- */
@@ -514,8 +563,16 @@ td.strong { font-weight: 600; }
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  /*
+   * var(--surface), not #fff. Hard-coded white here left the three dispute
+   * decision options as near-white text on a white card in dark mode — the
+   * admin could not read the choice they were about to make about someone's
+   * money. Same bug in .resolve-amount and .resolve-form textarea below.
+   */
+  background: var(--surface);
   cursor: pointer;
+  /* An option a mouse and a stylus can both hit. */
+  min-height: 44px;
 }
 .choice:hover { border-color: var(--ink-3); }
 .choice.selected { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
@@ -542,9 +599,10 @@ td.strong { font-weight: 600; }
   gap: 5px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--surface);
   padding: 0 10px;
   max-width: 170px;
+  min-height: 44px;
 }
 .resolve-amount span { color: var(--ink-3); font-size: 13px; }
 .resolve-amount input {
@@ -565,7 +623,8 @@ td.strong { font-weight: 600; }
   border-radius: 7px;
   padding: 9px 11px;
   resize: vertical;
-  background: #fff;
+  background: var(--surface);
+  color: var(--ink);
 }
 .resolve-form textarea:focus-visible,
 .resolve-amount:focus-within { outline: 2px solid var(--brand); outline-offset: 1px; }
@@ -573,15 +632,16 @@ td.strong { font-weight: 600; }
   font: inherit;
   font-size: 13px;
   font-weight: 650;
-  color: #fff;
+  color: var(--on-brand);
   background: var(--brand);
   border: 0;
   border-radius: 7px;
   padding: 9px 16px;
+  min-height: 44px;
   cursor: pointer;
   justify-self: start;
 }
-.resolve-form button:hover:not(:disabled) { background: var(--brand-bright); }
+.resolve-form button:hover:not(:disabled) { background: var(--brand-hover); }
 .resolve-form button:disabled { opacity: 0.45; cursor: not-allowed; }
 .resolve-error { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--danger); }
 .resolve-done { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--brand); }

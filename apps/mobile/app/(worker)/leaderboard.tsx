@@ -221,9 +221,11 @@ function Row({ entry, isMe }: { entry: Leaderboard['entries'][number]; isMe: boo
 const styles = StyleSheet.create({
   list: { paddingHorizontal: space[5], flexGrow: 1 },
   chipRow: { flexDirection: 'row', gap: space[2], flexWrap: 'wrap' },
+  // 38px was under the 44px minimum, and these are the controls that decide
+  // which board a worker is looking at.
   chip: {
-    borderWidth: 1, borderRadius: radius.full, paddingHorizontal: space[3],
-    minHeight: 38, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderRadius: radius.full, paddingHorizontal: space[4],
+    minHeight: minTouchTarget, alignItems: 'center', justifyContent: 'center',
   },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: space[3],

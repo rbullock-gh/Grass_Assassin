@@ -52,6 +52,9 @@ export const palette = {
   // Accent — used sparingly for payout emphasis and rank moments.
   gold500: '#D9A21B',
   gold400: '#EBB833',
+  // Dark enough to be readable as TEXT on white. gold500 is 2.3:1 there, which
+  // is a decorative colour being asked to do a job it cannot do.
+  gold600: '#8A6208',
   gold100: '#FBF0D4',
 
   // Semantic
@@ -73,16 +76,30 @@ export const semanticLight = {
 
   textPrimary:      palette.ink900,
   textSecondary:    palette.ink500,
-  textTertiary:     palette.ink400,
+  /**
+   * Was ink400, which measured 3.43:1 on white — below WCAG AA for body text.
+   *
+   * It read as refined on a desk monitor and was the colour on the price bands,
+   * the overlines and every caption in the app. A worker reads those outdoors on
+   * a phone at arm's length; faint grey is the wrong call twice over.
+   */
+  textTertiary:     palette.ink500,
   textInverse:      palette.white,
 
-  brand:            palette.green500,
-  brandHover:       palette.green600,
-  brandPressed:     palette.green700,
+  /**
+   * green600, not green500.
+   *
+   * White text on green500 is 3.30:1 and fails AA — and that combination is
+   * every primary button in the product: POST A JOB, CLAIM, Withdraw. green600
+   * takes it to 4.85:1 and is still unmistakably the same green.
+   */
+  brand:            palette.green600,
+  brandHover:       palette.green700,
+  brandPressed:     palette.green800,
   brandSubtle:      palette.green50,
   onBrand:          palette.white,
 
-  success:          palette.green500,
+  success:          palette.green600,
   successSubtle:    palette.green50,
   warning:          palette.amber500,
   warningSubtle:    palette.amber100,
@@ -92,7 +109,9 @@ export const semanticLight = {
   infoSubtle:       palette.blue100,
 
   payout:           palette.green600,
-  rank:             palette.gold500,
+  // gold500 as rank NUMBERS on white measured 2.3:1 — the least readable thing
+  // in the app sat on the leaderboard, which exists to be read.
+  rank:             palette.gold600,
   rankSubtle:       palette.gold100,
 } as const
 
@@ -396,14 +415,28 @@ export interface RankVisual {
   label: string
 }
 
+/**
+ * The light column is darker than a rank badge "wants" to be, and deliberately.
+ *
+ * These are rendered as the rank NAME beside a worker — 13px text, not a
+ * decorative dot — so they are body copy and owe 4.5:1, not the 3:1 a large
+ * badge would owe. The audit caught the earlier ladder at 3.30:1 (Lawn Ranger)
+ * through 4.37:1 (Rookie) on white: the leaderboard, whose entire purpose is to
+ * be read, held the least readable text in the product.
+ *
+ * Every light value now clears 4.5:1 against surfaceSunken (#E6ECE8), the
+ * darkest light-theme surface a rank can land on, which means it also clears it
+ * on surface and background. The ladder still steps — Rookie is grey-green and
+ * each rank above it deepens — so the progression survives the correction.
+ */
 export const rankVisuals: Record<string, RankVisual> = {
-  ROOKIE:         { light: '#6B7D73', dark: '#A8B6AE', glow: 'rgba(124,143,133,0.25)', label: 'Rookie' },
-  TRIMMER:        { light: '#3D8A5A', dark: '#6FCB95', glow: 'rgba(75,158,107,0.25)',  label: 'Trimmer' },
-  LAWN_RANGER:    { light: '#16A34A', dark: '#39C26F', glow: 'rgba(22,163,74,0.28)',   label: 'Lawn Ranger' },
-  YARD_HUNTER:    { light: '#0F833B', dark: '#4FCF7D', glow: 'rgba(15,131,59,0.30)',   label: 'Yard Hunter' },
-  GRASS_ASSASSIN: { light: '#0C682F', dark: '#69D894', glow: 'rgba(12,104,47,0.34)',   label: 'Grass Assassin' },
-  ELITE_ASSASSIN: { light: '#9A6F06', dark: '#EBB833', glow: 'rgba(217,162,27,0.34)',  label: 'Elite Assassin' },
-  LEGEND:         { light: '#8F6605', dark: '#F5C842', glow: 'rgba(184,134,11,0.42)',  label: 'Legend' },
+  ROOKIE:         { light: '#5D6C64', dark: '#A8B6AE', glow: 'rgba(124,143,133,0.25)', label: 'Rookie' },
+  TRIMMER:        { light: '#34754C', dark: '#6FCB95', glow: 'rgba(75,158,107,0.25)',  label: 'Trimmer' },
+  LAWN_RANGER:    { light: '#0E6A30', dark: '#39C26F', glow: 'rgba(22,163,74,0.28)',   label: 'Lawn Ranger' },
+  YARD_HUNTER:    { light: '#0A5928', dark: '#4FCF7D', glow: 'rgba(15,131,59,0.30)',   label: 'Yard Hunter' },
+  GRASS_ASSASSIN: { light: '#084720', dark: '#69D894', glow: 'rgba(12,104,47,0.34)',   label: 'Grass Assassin' },
+  ELITE_ASSASSIN: { light: '#886205', dark: '#EBB833', glow: 'rgba(217,162,27,0.34)',  label: 'Elite Assassin' },
+  LEGEND:         { light: '#725104', dark: '#F5C842', glow: 'rgba(184,134,11,0.42)',  label: 'Legend' },
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,10 @@ describe('text contrast — light theme', () => {
     ['primary text on surface',     semanticLight.textPrimary,   semanticLight.surface,       CONTRAST_AA_NORMAL],
     ['secondary text on surface',   semanticLight.textSecondary, semanticLight.surface,       CONTRAST_AA_NORMAL],
     ['secondary text on background',semanticLight.textSecondary, semanticLight.background,    CONTRAST_AA_NORMAL],
-    ['text on brand button',        semanticLight.onBrand,       semanticLight.brand,         CONTRAST_AA_LARGE],
+    // AA_NORMAL, not AA_LARGE. This case asked for 3:1 and green500 scored 3.30,
+    // so it passed while every primary button in the app was failing for real:
+    // the labels are 15px, and the large-text exemption starts at 18.66px bold.
+    ['text on brand button',        semanticLight.onBrand,       semanticLight.brand,         CONTRAST_AA_NORMAL],
     ['brand text on subtle brand',  palette.green700,            semanticLight.brandSubtle,   CONTRAST_AA_NORMAL],
     ['danger text on subtle',       palette.red500,              semanticLight.dangerSubtle,  CONTRAST_AA_LARGE],
     ['payout figure on surface',    semanticLight.payout,        semanticLight.surface,       CONTRAST_AA_NORMAL],
@@ -95,11 +98,62 @@ describe('map markers stay legible at a glance', () => {
 })
 
 describe('rank visuals', () => {
-  it('is legible on light surfaces', () => {
+  /**
+   * Rank names render at 13px, so they are normal text and owe 4.5:1.
+   *
+   * This suite used to check them at CONTRAST_AA_LARGE, and passed while the
+   * rendered app showed Lawn Ranger at 3.30:1. A threshold that does not match
+   * the size the thing is drawn at is not a check, it is a rubber stamp — the
+   * same mistake the brand-button case in this file made.
+   */
+  const lightSurfaces = [
+    ['surface', semanticLight.surface],
+    ['background', semanticLight.background],
+    ['surfaceSunken', semanticLight.surfaceSunken],
+  ] as const
+  const darkSurfaces = [
+    ['surface', semanticDark.surface],
+    ['background', semanticDark.background],
+    ['surfaceSunken', semanticDark.surfaceSunken],
+  ] as const
+
+  it('is legible as 13px text on every light surface it can land on', () => {
     for (const [key, visual] of Object.entries(rankVisuals)) {
-      const ratio = contrastRatio(visual.light, semanticLight.surface)
-      expect(ratio, `${key} light ${visual.light} on ${semanticLight.surface} = ${ratio.toFixed(2)}:1`)
-        .toBeGreaterThanOrEqual(CONTRAST_AA_LARGE)
+      for (const [surfaceName, surface] of lightSurfaces) {
+        const ratio = contrastRatio(visual.light, surface)
+        expect(ratio, `${key} light ${visual.light} on ${surfaceName} ${surface} = ${ratio.toFixed(2)}:1`)
+          .toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+      }
+    }
+  })
+
+  it('is legible as 13px text on every dark surface it can land on', () => {
+    for (const [key, visual] of Object.entries(rankVisuals)) {
+      for (const [surfaceName, surface] of darkSurfaces) {
+        const ratio = contrastRatio(visual.dark, surface)
+        expect(ratio, `${key} dark ${visual.dark} on ${surfaceName} ${surface} = ${ratio.toFixed(2)}:1`)
+          .toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+      }
+    }
+  })
+
+  it('keeps the ladder distinguishable after the darkening', () => {
+    // Fixing contrast by pushing every rank to the same near-black would pass
+    // the two tests above and destroy the thing ranks are for. Adjacent ranks
+    // must stay apart: the progression is the feature.
+    const order = ['ROOKIE', 'TRIMMER', 'LAWN_RANGER', 'YARD_HUNTER', 'GRASS_ASSASSIN', 'ELITE_ASSASSIN', 'LEGEND']
+    const seen = new Set<string>()
+    for (const key of order) {
+      const light = rankVisuals[key]!.light.toUpperCase()
+      expect(seen.has(light), `${key} reuses ${light}`).toBe(false)
+      seen.add(light)
+    }
+    // Within the green run, each step is visibly deeper than the last.
+    const greenRun = ['TRIMMER', 'LAWN_RANGER', 'YARD_HUNTER', 'GRASS_ASSASSIN']
+    for (let i = 1; i < greenRun.length; i += 1) {
+      const previous = contrastRatio(rankVisuals[greenRun[i - 1]!]!.light, semanticLight.surface)
+      const current = contrastRatio(rankVisuals[greenRun[i]!]!.light, semanticLight.surface)
+      expect(current, `${greenRun[i]} is no deeper than ${greenRun[i - 1]}`).toBeGreaterThan(previous + 0.5)
     }
   })
 
@@ -203,10 +257,54 @@ describe('the "not ready yet" button state', () => {
     }
   })
 
-  it('records that textTertiary is NOT good enough for it', () => {
-    // Asserted so the cheaper-looking token is not swapped back in by someone
-    // who reads the greyed-out styling as "disabled, therefore exempt".
-    expect(contrastRatio(semanticLight.textTertiary, semanticLight.surfaceSunken))
-      .toBeLessThan(CONTRAST_AA_NORMAL)
+  /**
+   * This used to assert the opposite: that textTertiary was NOT readable enough
+   * for this button, as a guard against someone swapping the cheaper-looking
+   * token back in.
+   *
+   * An automated audit across every screen then found that the same token was
+   * failing AA everywhere else it appeared — the price bands, the overlines,
+   * every caption — so it was darkened from ink400 to ink500 rather than
+   * avoided in one place. The guard's intent survives as the stronger rule
+   * below: no text token may be too faint on any surface it is used on, so
+   * there is no longer a cheap one to swap in.
+   */
+  it('has no text token that fails on any surface it sits on', () => {
+    const surfaces = ['background', 'surface', 'surfaceSunken'] as const
+    const texts = ['textPrimary', 'textSecondary', 'textTertiary'] as const
+
+    for (const [name, theme] of [['light', semanticLight], ['dark', semanticDark]] as const) {
+      for (const text of texts) {
+        for (const surface of surfaces) {
+          const ratio = contrastRatio(theme[text], theme[surface])
+          expect(
+            ratio,
+            `${name}: ${text} on ${surface} is ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+        }
+      }
+    }
+  })
+
+  it('keeps white legible on every brand surface that carries a label', () => {
+    // Every primary button in the product. White on green500 measured 3.30:1,
+    // which is why brand is green600.
+    for (const [name, theme] of [['light', semanticLight], ['dark', semanticDark]] as const) {
+      for (const surface of ['brand', 'brandHover', 'brandPressed'] as const) {
+        const ratio = contrastRatio(theme.onBrand, theme[surface])
+        expect(
+          ratio,
+          `${name}: onBrand on ${surface} is ${ratio.toFixed(2)}:1`,
+        ).toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+      }
+    }
+  })
+
+  it('keeps the rank colour readable, since the leaderboard exists to be read', () => {
+    for (const [name, theme] of [['light', semanticLight], ['dark', semanticDark]] as const) {
+      const ratio = contrastRatio(theme.rank, theme.surface)
+      expect(ratio, `${name}: rank is ${ratio.toFixed(2)}:1`)
+        .toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+    }
   })
 })
