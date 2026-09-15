@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Pressable,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, router } from 'expo-router'
 import type { Earnings } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -132,6 +132,24 @@ export default function EarningsScreen() {
             </View>
           ) : null}
 
+          {/* The way to the money. Without this the balance above is a number a
+              worker can read and not reach, which is the worst version of this
+              screen. */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(worker)/payouts')}
+            style={({ pressed }) => [
+              styles.cashOut,
+              { backgroundColor: c.brand, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={[textStyles.bodyStrong, { color: c.onBrand }]}>
+              {earnings.availableBalanceCents > 0
+                ? `Withdraw ${displayMoney(earnings.availableBalanceCents)}`
+                : 'Set up payouts'}
+            </Text>
+          </Pressable>
+
           <View style={{ gap: space[3], marginTop: space[4] }}>
             <Text style={[textStyles.heading, { color: c.textPrimary }]}>Payouts</Text>
             {earnings.payouts.length === 0 ? (
@@ -180,6 +198,14 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  cashOut: {
+    borderRadius: radius.md,
+    paddingVertical: space[4],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space[4],
+    minHeight: 48,
+  },
   content: { paddingHorizontal: space[5], gap: space[4] },
   hero: { borderWidth: 1, borderRadius: radius.lg, padding: space[5], gap: space[1] },
   statRow: { flexDirection: 'row', gap: space[2] },

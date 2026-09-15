@@ -28,6 +28,16 @@ export class FakePaymentProvider implements PaymentProvider {
   private readonly charges = new Map<string, { amountCents: number; refundedCents: number }>()
   private readonly customers = new Set<string>()
   private readonly accounts = new Map<string, ConnectedAccountStatus>()
+  /**
+   * Cards, per customer.
+   *
+   * This used to return the same card for every customer, which made the
+   * ownership check on "set my default card" untestable — a stranger's card
+   * appeared in your list, so refusing it would have looked correct for entirely
+   * the wrong reason. A fake that cannot tell two customers apart cannot be used
+   * to prove the real thing does.
+   */
+  private readonly paymentMethods = new Map<string, PaymentMethodRef[]>()
 
   /** Failure injection. Set a key to make the matching operation fail. */
   failures: {
@@ -35,6 +45,7 @@ export class FakePaymentProvider implements PaymentProvider {
     transferFor?: Set<string>
     refundPending?: boolean
     nextChargeFailure?: { code: string; message: string }
+    payoutMessage?: string
   } = {}
 
   /** Every call made, for asserting on call counts (e.g. "charged exactly once"). */
@@ -66,8 +77,24 @@ export class FakePaymentProvider implements PaymentProvider {
     return { clientSecret: `${setupIntentId}_secret`, setupIntentId }
   }
 
-  async listPaymentMethods(_customerRef: string): Promise<PaymentMethodRef[]> {
-    return [{ id: 'pm_test_visa', brand: 'visa', last4: '4242' }]
+  async listPaymentMethods(customerRef: string): Promise<PaymentMethodRef[]> {
+    return this.paymentMethods.get(customerRef) ?? []
+  }
+
+  /** Test helper: saves a card against one customer, the way a SetupIntent would. */
+  attachPaymentMethod(
+    customerRef: string,
+    card: { brand: string; last4: string },
+  ): PaymentMethodRef {
+    const method: PaymentMethodRef = { id: this.id('pm'), ...card }
+    const existing = this.paymentMethods.get(customerRef) ?? []
+    this.paymentMethods.set(customerRef, [...existing, method])
+    return method
+  }
+
+  /** Test helper: make every payout attempt fail, the way a closed account would. */
+  failPayouts(message: string): void {
+    this.failures.payoutMessage = message
   }
 
   async charge(params: ChargeParams): Promise<ChargeResult> {
@@ -164,6 +191,7 @@ export class FakePaymentProvider implements PaymentProvider {
 
   async payout(params: PayoutParams): Promise<PayoutResult> {
     this.calls.push({ op: 'payout', key: params.idempotencyKey, amountCents: params.amountCents })
+    if (this.failures.payoutMessage) throw new Error(this.failures.payoutMessage)
     return this.cached(params.idempotencyKey, (): PayoutResult => ({
       payoutId: this.id('po'),
       status: params.instant ? 'paid' : 'in_transit',
@@ -189,6 +217,7 @@ export class FakePaymentProvider implements PaymentProvider {
     this.idempotencyCache.clear()
     this.charges.clear()
     this.accounts.clear()
+    this.paymentMethods.clear()
     this.calls.length = 0
     this.failures = {}
   }

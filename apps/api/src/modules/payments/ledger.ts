@@ -35,6 +35,15 @@ export const ACCOUNTS = {
   promotions: 'platform:promotions',
   /** Money returned to a customer. */
   refunds: 'platform:refunds',
+  /**
+   * Money that has actually left the platform for a worker's bank.
+   *
+   * A worker's own account holds their claim on funds; paying them out does not
+   * destroy that money, it moves it somewhere this ledger can no longer see. It
+   * still has to land in an account or the entry would not balance, so it lands
+   * here. The running total is what has been remitted, ever.
+   */
+  payoutsOut: 'platform:payouts',
 } as const
 
 export interface LedgerLine {

@@ -394,6 +394,49 @@ export class GrassAssassinClient {
   leaderboard(scope: 'LOCAL' | 'CITY' | 'ROOKIE' = 'CITY', period: 'WEEKLY' | 'MONTHLY' | 'ALL_TIME' = 'WEEKLY') {
     return this.request<Leaderboard>('GET', '/v1/leaderboard', { query: { scope, period } })
   }
+
+  // --- paying, and being paid ----------------------------------------------
+
+  /**
+   * Starts saving a card.
+   *
+   * Returns a client secret for the payment provider's own SDK. The card number
+   * goes from the device straight to the provider — it never travels through our
+   * API, which is what keeps it out of our logs and our database.
+   */
+  startCardSetup() {
+    return this.request<CardSetup>('POST', '/v1/billing/setup-intent')
+  }
+
+  paymentMethods() {
+    return this.request<SavedCards>('GET', '/v1/billing/payment-methods')
+  }
+
+  setDefaultCard(paymentMethodId: string) {
+    return this.request<{ defaultPaymentMethodId: string }>(
+      'POST', '/v1/billing/payment-methods/default', { body: { paymentMethodId } },
+    )
+  }
+
+  /** Returns a URL to open. The provider collects the bank and tax details, not us. */
+  startPayoutOnboarding(returnUrl?: string, refreshUrl?: string) {
+    return this.request<{ url: string; accountRef: string }>(
+      'POST', '/v1/worker/payouts/onboard', { body: { returnUrl, refreshUrl } },
+    )
+  }
+
+  payoutStatus() {
+    return this.request<PayoutReadiness>('GET', '/v1/worker/payouts/status')
+  }
+
+  payouts() {
+    return this.request<{ payouts: PayoutRecord[] }>('GET', '/v1/worker/payouts')
+  }
+
+  /** Omitting the amount withdraws the whole available balance. */
+  withdraw(amountCents?: number) {
+    return this.request<Withdrawal>('POST', '/v1/worker/payouts', { body: { amountCents } })
+  }
 }
 
 // --- response shapes -------------------------------------------------------
@@ -644,4 +687,51 @@ export interface Leaderboard {
     rank: number; workerId: string; firstName: string; avatarUrl: string | null
     rankName: string | null; points: number; jobsCompleted: number
   }>
+}
+
+export interface CardSetup {
+  clientSecret: string
+  setupIntentId: string
+  customerRef: string
+}
+
+export interface SavedCard {
+  id: string
+  brand?: string
+  last4?: string
+  isDefault: boolean
+}
+
+export interface SavedCards {
+  methods: SavedCard[]
+  defaultPaymentMethodId: string | null
+}
+
+export interface PayoutReadiness {
+  onboarded: boolean
+  payoutsEnabled: boolean
+  chargesEnabled: boolean
+  requirementsDue: string[]
+  availableBalanceCents: number
+  pendingBalanceCents: number
+  minimumPayoutCents: number
+}
+
+export interface PayoutRecord {
+  id: string
+  amountCents: number
+  feeCents: number
+  status: string
+  instant: boolean
+  arrivalDate: string | null
+  failureMessage: string | null
+  createdAt: string
+}
+
+export interface Withdrawal {
+  payoutId: string
+  amountCents: number
+  status: string
+  arrivalDate: string | null
+  remainingBalanceCents: number
 }

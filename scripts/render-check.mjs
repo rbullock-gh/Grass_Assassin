@@ -87,6 +87,8 @@ async function main() {
     { name: 'worker-map', path: '/map', as: worker, settleMs: 8000 },
     { name: 'worker-setup', path: '/setup', as: worker },
     { name: 'earnings', path: '/earnings', as: worker },
+    { name: 'payouts', path: '/payouts', as: worker },
+    { name: 'payment-methods', path: '/payment-methods', as: customer },
     { name: 'leaderboard', path: '/leaderboard', as: worker },
     { name: 'conversations', path: '/messages', as: worker },
     { name: 'cust-home', path: '/home', as: customer },
