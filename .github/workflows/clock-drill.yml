@@ -1,0 +1,82 @@
+name: Clock drill
+
+# Runs the API suite as if it were several different times of day.
+#
+# Three tests in this repository have only passed at certain hours. Two were
+# found by accident, because a run happened to land at 02:13 and 03:17 UTC: a
+# "due today" fixture that crossed local midnight and failed for four hours of
+# every day, and three notification tests that asserted a push the code
+# correctly suppressed during quiet hours, failing for ten. Neither was a flake.
+# Both would have surfaced as mysterious red builds at the hours nobody watches.
+#
+# Nightly rather than per-change: it is three full suite runs, which is far too
+# slow to put in front of a pull request and cheap enough to run while everyone
+# is asleep — which is, conveniently, exactly the window these bugs live in.
+
+on:
+  schedule:
+    # 04:00 UTC daily. The offsets below then cover late evening, early morning
+    # and mid-afternoon US Central.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      offsets:
+        description: 'Hour offsets to test, space separated'
+        default: '3 6 9 12 15 18 21'
+
+jobs:
+  drill:
+    name: The suite, at other hours
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: grass
+          POSTGRES_PASSWORD: grass
+          POSTGRES_DB: grassassassin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://grass:grass@localhost:5432/grassassassin_test
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @grassassassin/api db:generate
+      - run: pnpm --filter @grassassassin/api db:deploy
+
+      - name: Run at each offset
+        run: |
+          offsets="${{ github.event.inputs.offsets || '3 6 9 12 15 18 21' }}"
+          failed=""
+          for off in $offsets; do
+            echo "::group::clock +${off}h"
+            if TEST_CLOCK_OFFSET_HOURS="$off" pnpm --filter @grassassassin/api test; then
+              echo "+${off}h: pass"
+            else
+              echo "::error::The suite fails when the clock reads ${off}h from now."
+              failed="$failed +${off}h"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Time-dependent failures at:$failed"
+            exit 1
+          fi
+          echo "Passes at every offset tested."
