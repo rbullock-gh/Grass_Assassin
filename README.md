@@ -15,7 +15,7 @@ See `docs/03-roadmap-and-team.md`.
 
 | | |
 |---|---|
-| Tests passing | **894** (161 domain · 364 API · 214 mobile · 37 design · 19 client · 37 admin) plus 85 browser checks |
+| Tests passing | **832** (364 API · 214 mobile · 161 domain · 37 admin · 37 design · 19 client) plus **270 browser checks** (96 mobile screens · 64 admin screens · 54 auth · 25 dispute end-to-end · 17 revocation · 14 brute-force) |
 | Database | PostgreSQL 16 + PostGIS 3.4 · 48 tables · 6 GIST indexes · 18 CHECK constraints |
 | CI | green on typecheck, the full suite against real PostGIS, a structural migration-drift check, a mobile bundle on a cold cache, and an end-to-end smoke run against a live server. Two further jobs — rendering every mobile screen, and driving the admin dashboard's locks against a production build — are configured and pass locally but have not yet run on a GitHub runner |
 | Verified end to end | post → search → claim → message → photo upload → geofenced start → complete → approve → pay → points → rate → tip → recurring, over real HTTP |
