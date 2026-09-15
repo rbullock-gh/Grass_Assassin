@@ -274,6 +274,24 @@ jobs:
       - name: A revoked administrator loses access immediately
         run: node scripts/admin-revocation-check.mjs
 
+      # Needs an open dispute, or the decision form the render check exists to
+      # look at is simply not on the page. The script fails rather than passing
+      # quietly if it is missing.
+      - name: Open a dispute for the render check to draw
+        run: pnpm --filter @grassassassin/api exec tsx prisma/open-dispute.ts
+
+      - name: Every admin page at every width, in both themes
+        run: node scripts/admin-render-check.mjs
+
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-screenshots
+          path: .render-check-admin
+          retention-days: 7
+          if-no-files-found: ignore
+
       # Last: it deliberately leaves an address blocked in the server's memory.
       - name: Guessing the password is throttled, without locking anyone out
         run: node scripts/admin-bruteforce-check.mjs

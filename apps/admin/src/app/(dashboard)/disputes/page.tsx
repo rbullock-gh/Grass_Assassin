@@ -81,6 +81,62 @@ export default async function DisputesPage() {
         </div>
       </div>
 
+      {/*
+        The decision queue lives OUTSIDE the table on purpose.
+        
+        It began as an extra row inside it, directly under the evidence, which
+        reads well on a desktop and is unusable on a phone: the table scrolls
+        horizontally, so the options and the submit button sit off the right
+        edge with no indication they are there. Rendering it at 390px is what
+        showed that — it passed every functional check first.
+        
+        Separating it is also just better. What needs a decision and what has
+        already been decided are two different questions, and only one of them
+        is urgent.
+      */}
+      {open.length > 0 ? (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Awaiting a decision</h2>
+            <span>{open.length} {open.length === 1 ? 'dispute' : 'disputes'}</span>
+          </div>
+          <div className="decision-queue">
+            {open.map((dispute) => {
+              const photos = photosByJob.get(dispute.job.id) ?? 0
+              const geofenced = dispute.job.startedAt !== null
+              return (
+                <article key={dispute.id} className="decision-card">
+                  <header>
+                    <div>
+                      <h3>{dispute.job.title}</h3>
+                      <p className="muted">
+                        {dispute.job.customer.firstName} · {dispute.job.generalArea} ·
+                        opened {relativeTime(dispute.createdAt)}
+                      </p>
+                    </div>
+                    <span className={`pill ${photos >= 2 && geofenced ? 'success' : photos > 0 || geofenced ? 'warning' : 'danger'}`}>
+                      {photos === 0 && !geofenced
+                        ? 'No evidence'
+                        : `${photos} photo${photos === 1 ? '' : 's'}${geofenced ? ' · on site' : ''}`}
+                    </span>
+                  </header>
+
+                  <p className="decision-reason">
+                    <strong>{titleCase(dispute.reason)}</strong> — {dispute.description}
+                  </p>
+
+                  <ResolveForm
+                    disputeId={dispute.id}
+                    customerPaidCents={dispute.job.customerTotalCents}
+                    workerPayoutCents={dispute.job.workerPayoutCents}
+                  />
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel">
         <div className="panel-head">
           <h2>Disputes</h2>
@@ -135,24 +191,10 @@ export default async function DisputesPage() {
                       <td className="muted">{relativeTime(dispute.createdAt)}</td>
                     </tr>
                   )
-                  const decidable = dispute.status === 'OPEN' || dispute.status === 'UNDER_REVIEW'
                   return (
                     <Fragment key={dispute.id}>
                       {row}
-                      {decidable ? (
-                        <tr className="resolve-row">
-                          {/* The decision sits directly under the evidence it
-                              is based on. A separate screen would mean deciding
-                              from memory. */}
-                          <td colSpan={6}>
-                            <ResolveForm
-                              disputeId={dispute.id}
-                              customerPaidCents={dispute.job.customerTotalCents}
-                              workerPayoutCents={dispute.job.workerPayoutCents}
-                            />
-                          </td>
-                        </tr>
-                      ) : dispute.resolution ? (
+                      {dispute.resolution ? (
                         <tr className="resolve-row">
                           <td colSpan={6}>
                             <p className="resolved-note" data-dispute={dispute.id}>

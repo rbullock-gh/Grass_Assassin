@@ -5,6 +5,7 @@ build/
 .expo/
 .expo-web-ci/
 .render-check/
+.render-check-admin/
 .web/
 coverage/
 *.tsbuildinfo

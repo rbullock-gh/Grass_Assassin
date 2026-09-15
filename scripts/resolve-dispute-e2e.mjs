@@ -91,13 +91,18 @@ try {
   const splitInput = form.locator('input[name="refundDollars"]')
   check(await splitInput.isVisible(), 'choosing split reveals the refund amount field')
 
-  await splitInput.fill('40.00')
+  // Derived from the dispute we actually found, not hard-coded. A fixed $40
+  // silently exceeded a $37.99 job, the client validation correctly refused to
+  // enable the button, and the failure looked like a broken form.
+  const REFUND_CENTS = Math.max(100, Math.round(target.job.customerTotalCents * 0.4))
+  const refundDollars = (REFUND_CENTS / 100).toFixed(2)
+  await splitInput.fill(refundDollars)
   const hint = form.locator('.resolve-split p.muted')
   const shown = await hint.innerText()
-  // 9720 paid, 4000 refunded -> 5720 stands -> worker gets round(7920 * 5720/9720)
+  // The worker is paid for the portion that stands, not for the gross.
   const expectedSplitPay = Math.min(
     target.job.workerPayoutCents,
-    Math.round(target.job.workerPayoutCents * ((target.job.customerTotalCents - 4000) / target.job.customerTotalCents)),
+    Math.round(target.job.workerPayoutCents * ((target.job.customerTotalCents - REFUND_CENTS) / target.job.customerTotalCents)),
   )
   check(shown.includes(`$${(expectedSplitPay / 100).toFixed(2)}`),
     `the split preview computes the worker's share ($${(expectedSplitPay / 100).toFixed(2)})`, shown)
@@ -128,7 +133,7 @@ try {
     select: { status: true, refundCents: true, resolution: true, resolvedById: true, resolvedAt: true },
   })
   check(after.status === 'RESOLVED_SPLIT', 'the dispute is recorded as a split', after.status)
-  check(after.refundCents === 4000, 'the refund amount is what was typed', String(after.refundCents))
+  check(after.refundCents === REFUND_CENTS, 'the refund amount is what was typed', String(after.refundCents))
   check(after.resolution === REASON, 'the explanation is stored verbatim')
   check(after.resolvedAt !== null, 'a resolution timestamp is recorded')
 
@@ -159,7 +164,7 @@ try {
   // Scoped to THIS dispute. Reading .first() picked up an older resolution and
   // reported a failure against a row that was perfectly correct.
   const noteText = await page.locator(`.resolved-note[data-dispute="${target.id}"]`).innerText()
-  check(noteText.includes('$40.00'), 'the page states the refund that was recorded', noteText)
+  check(noteText.includes(`$${refundDollars}`), 'the page states the refund that was recorded', noteText)
   check(noteText.includes(`$${(expectedSplitPay / 100).toFixed(2)}`),
     'the page states what the worker was actually paid', noteText)
   check(noteText.includes('Ada'), 'the page names who resolved it', noteText)
