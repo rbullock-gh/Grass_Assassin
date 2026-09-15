@@ -11,10 +11,12 @@ import { chromium } from 'playwright'
  * browser facts, so this asks a browser.
  *
  * Usage:
- *   ADMIN_PASSWORD=... ADMIN_SESSION_SECRET=... pnpm --filter @grassassassin/admin dev
+ *   pnpm --filter @grassassassin/api admin:create -- --email … --password …
+ *   ADMIN_SESSION_SECRET=… pnpm --filter @grassassassin/admin dev
  *   node scripts/admin-auth-check.mjs [--base http://localhost:3001]
  *
- * The password must match the server's ADMIN_PASSWORD; pass it the same way.
+ * ADMIN_EMAIL and ADMIN_PASSWORD must name a real administrator account on the
+ * database the dashboard is pointed at.
  */
 
 const argOf = (flag, fallback) => {
@@ -22,7 +24,10 @@ const argOf = (flag, fallback) => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback
 }
 const BASE = argOf('--base', process.env.ADMIN_BASE_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+const EMAIL = process.env.ADMIN_EMAIL ?? 'admin@grassassassin.test'
 const PASSWORD = process.env.ADMIN_PASSWORD ?? 'test-admin-password'
+// Seeded non-admin accounts, used to prove the role is what grants access.
+const NON_ADMIN_PASSWORD = process.env.SEED_PASSWORD ?? 'GrassDemo123!'
 const HOST = new URL(BASE).host
 let pass = 0, fail = 0
 const check = (ok, label, detail = '') => {
@@ -39,8 +44,9 @@ const check = (ok, label, detail = '') => {
  * working. waitForURL is the difference between testing the app and testing my
  * own patience.
  */
-async function submitPassword(page, password) {
+async function submitPassword(page, password, email = EMAIL) {
   const before = page.url()
+  await page.fill('input[name="email"]', email)
   await page.fill('input[name="password"]', password)
   await Promise.all([
     page.waitForURL((url) => url.toString() !== before, { timeout: 15_000 }),
@@ -63,6 +69,7 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
     check(new URL(page.url()).pathname === '/sign-in', `${path} sends an anonymous visitor to /sign-in`, page.url())
     check(response?.status() === 200, `${path} ends on a real page, not an error`, String(response?.status()))
   }
+  check(await page.locator('input[name="email"]').isVisible(), 'sign-in shows an email field')
   check(await page.locator('input[name="password"]').isVisible(), 'sign-in shows a password field')
   check(errors.length === 0, 'sign-in renders with no page errors', errors.join('; '))
 
@@ -137,9 +144,73 @@ let goodCookie
   check(await page.locator('.sidebar').count() === 1,
     'the sidebar is back once signed in (the fix hid it, not deleted it)')
 
+  // Every consequential action is recorded against this person, so the page
+  // should say who the audit log is about to name.
+  const sidebar = await page.locator('.sidebar').innerText()
+  check(sidebar.includes(EMAIL), 'the sidebar names the signed-in administrator', sidebar)
+
   await page.goto(`${BASE}/disputes`, { waitUntil: 'networkidle' })
   check(new URL(page.url()).pathname === '/disputes', 'the session carries to /disputes', page.url())
   check(errors.length === 0, 'signed-in pages render with no page errors', errors.join('; '))
+  await ctx.close()
+}
+
+// ---- 3b. A real account without the role cannot sign in ---------------
+{
+  // The check that separates "authenticated" from "authorised". These are
+  // genuine seeded customers with genuine passwords; the password being right
+  // is exactly why this has to be refused.
+  for (const email of ['customer1@grassassassin.test', 'worker1@grassassassin.test']) {
+    const ctx = await browser.newContext()
+    const page = await ctx.newPage()
+    await page.goto(`${BASE}/sign-in?next=%2Fconfig`, { waitUntil: 'networkidle' })
+    await submitPassword(page, NON_ADMIN_PASSWORD, email)
+    check(new URL(page.url()).pathname === '/sign-in', `${email} cannot sign in to the admin`, page.url())
+    const cookies = await ctx.cookies()
+    check(!cookies.some((c) => c.name === 'ga_admin'), `${email} gets no session cookie`)
+    await ctx.close()
+  }
+}
+
+// ---- 3c. A session naming a user who is not an admin is refused -------
+{
+  // A correctly signed cookie is still only an assertion of identity. This is
+  // the re-read: the signature is genuine, the account is real, the role is
+  // not there. Without the per-request check this would sail through.
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
+  const [, expiry, nonce, sig] = goodCookie.value.split('.')
+  // Not forgeable without the secret, so this asserts the *shape* is refused
+  // rather than that a real substitution works — the swap invalidates the
+  // signature, which is itself the property we want.
+  await ctx.addCookies([{
+    name: 'ga_admin', value: `someoneelse.${expiry}.${nonce}.${sig}`,
+    domain: new URL(BASE).hostname, path: '/',
+  }])
+  await page.goto(`${BASE}/config`, { waitUntil: 'networkidle' })
+  check(new URL(page.url()).pathname === '/sign-in',
+    'a cookie naming a different user is rejected', page.url())
+  await ctx.close()
+}
+
+// ---- 3d. Signing out actually ends the session ------------------------
+{
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
+  await page.goto(`${BASE}/sign-in`, { waitUntil: 'networkidle' })
+  await submitPassword(page, PASSWORD)
+  check(new URL(page.url()).pathname === '/', 'signed in for the sign-out check', page.url())
+
+  const before = page.url()
+  await Promise.all([
+    page.waitForURL((u) => u.toString() !== before, { timeout: 15_000 }),
+    page.click('button.sign-out'),
+  ])
+  check(new URL(page.url()).pathname === '/sign-in', 'sign out returns to /sign-in', page.url())
+  check(!(await ctx.cookies()).some((c) => c.name === 'ga_admin'), 'sign out clears the cookie')
+
+  await page.goto(`${BASE}/config`, { waitUntil: 'networkidle' })
+  check(new URL(page.url()).pathname === '/sign-in', 'after signing out /config is gated again', page.url())
   await ctx.close()
 }
 

@@ -1,15 +1,19 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
-import { adminEnv, issueSession, passwordMatches, sessionCookieName } from '@/lib/session'
+import { authenticateAdmin } from '@/lib/admin-user'
+import {
+  adminSecret, issueSession, sessionCookieName, sessionMaxAgeSeconds,
+} from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * The only page reachable without a session.
  *
- * One password, no account enumeration to worry about, and a deliberately
- * uninformative failure — "that is not the password" tells an attacker nothing
- * they did not already know, and tells the operator everything they need.
+ * Deliberately uninformative on failure. "Those credentials are not valid"
+ * covers no such account, wrong password, and a real account without the
+ * administrator role — telling them apart would let anyone map out who has
+ * access here, and helps nobody who is genuinely trying to sign in.
  */
 export default async function SignInPage({
   searchParams,
@@ -17,27 +21,29 @@ export default async function SignInPage({
   searchParams: Promise<{ next?: string; error?: string }>
 }) {
   const params = await searchParams
-  const env = adminEnv()
-  if (!env) redirect('/')
+  if (!adminSecret()) redirect('/')
 
   async function signIn(form: FormData) {
     'use server'
-    const current = adminEnv()
-    if (!current) redirect('/')
+    const secret = adminSecret()
+    if (!secret) redirect('/')
 
-    const submitted = String(form.get('password') ?? '')
+    const email = String(form.get('email') ?? '')
+    const password = String(form.get('password') ?? '')
     const destination = safeNext(String(form.get('next') ?? '/'))
 
-    if (!(await passwordMatches(current.password, submitted))) {
+    const admin = await authenticateAdmin(email, password)
+    if (!admin) {
       redirect(`/sign-in?error=1&next=${encodeURIComponent(destination)}`)
     }
 
     const store = await cookies()
-    store.set(sessionCookieName(), await issueSession(current.secret), {
+    store.set(sessionCookieName(), await issueSession(secret, admin.id), {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       path: '/',
+      maxAge: sessionMaxAgeSeconds(),
     })
     redirect(destination)
   }
@@ -51,11 +57,14 @@ export default async function SignInPage({
           read-only view.
         </p>
 
+        <label htmlFor="email">Email</label>
+        <input id="email" name="email" type="email" autoComplete="username" autoFocus />
+
         <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" autoComplete="current-password" autoFocus />
+        <input id="password" name="password" type="password" autoComplete="current-password" />
         <input type="hidden" name="next" value={params.next ?? '/'} />
 
-        {params.error ? <p className="signin-error">That is not the password.</p> : null}
+        {params.error ? <p className="signin-error">Those credentials are not valid.</p> : null}
 
         <button type="submit">Sign in</button>
       </form>

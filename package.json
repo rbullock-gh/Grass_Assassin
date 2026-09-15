@@ -16,6 +16,7 @@
     "dev:api": "pnpm --filter @grassassassin/api dev"
   },
   "devDependencies": {
+    "@prisma/client": "6.19.3",
     "@types/node": "^22.10.2",
     "playwright": "1.56.1",
     "typescript": "^5.7.2",

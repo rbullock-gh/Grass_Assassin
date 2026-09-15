@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { adminEnv, sessionCookieName, verifySession } from '@/lib/session'
+import { adminSecret, sessionCookieName, readSession } from '@/lib/session'
 
 /**
  * Nothing in here is reachable without a session.
@@ -7,18 +7,22 @@ import { adminEnv, sessionCookieName, verifySession } from '@/lib/session'
  * Applied at the edge rather than per page, because the failure mode of
  * per-page checks is the page somebody forgets — and on this dashboard the page
  * somebody forgets might be the one that changes the commission.
+ *
+ * This is the cheap check: signature and expiry only, no database. Whether the
+ * account behind the session is still an active administrator is re-read per
+ * request in currentAdmin, which is what actually gates the pages.
  */
 export async function middleware(request: NextRequest) {
-  const env = adminEnv()
+  const secret = adminSecret()
 
-  // Local development with no password set: open, and the banner on the page
-  // says so. Production throws in adminEnv rather than reaching this branch.
-  if (!env) return NextResponse.next()
+  // Local development with no secret set: open, and the banner on the page
+  // says so. Production throws in adminSecret rather than reaching this branch.
+  if (!secret) return NextResponse.next()
 
   const { pathname } = request.nextUrl
   if (pathname.startsWith('/sign-in')) return NextResponse.next()
 
-  if (await verifySession(env.secret, request.cookies.get(sessionCookieName())?.value)) {
+  if (await readSession(secret, request.cookies.get(sessionCookieName())?.value)) {
     return NextResponse.next()
   }
 

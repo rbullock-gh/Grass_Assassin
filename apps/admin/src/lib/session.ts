@@ -1,46 +1,47 @@
 /**
- * Admin authentication.
+ * Admin sessions.
  *
- * This dashboard shipped with none, justified as "a staff tool on a trusted
- * network". That was defensible while every page was read-only. It stopped
- * being defensible the moment it could change the platform commission and
- * resolve disputes: anyone who can reach the port can now move money.
+ * This dashboard shipped with no authentication, justified as "a staff tool on
+ * a trusted network". That was defensible while every page was read-only. It
+ * stopped being defensible the moment it could change the platform commission
+ * and resolve disputes: anyone who could reach the port could move money.
  *
- * So: a single shared password, held in an environment variable, exchanged for
- * a signed session cookie. Not an identity system — there is one operator role
- * and no per-person audit trail yet, which is a real limitation and is written
- * down rather than hidden. It is the difference between "staff only" and
- * "anyone who can reach the port", which is the gap that actually matters.
+ * The first fix was a single shared password. That closed the door, but it
+ * could not say WHO walked through it — and the next thing this dashboard has
+ * to do is record which administrator resolved a dispute and why. An audit
+ * trail whose actor column reads "somebody who knew the password" is not an
+ * audit trail. So a session now identifies a real user account, which can also
+ * be revoked, suspended, and rotated one person at a time.
  *
- * Built on Web Crypto rather than node:crypto because the check runs in
- * middleware, which Next executes on the Edge runtime where node:crypto does
- * not exist. Everything here is therefore async, and works unchanged in both.
+ * The cookie is a signed assertion of identity, not a bearer of authority:
+ * it says "this is user X", and every consequential path re-reads that user
+ * from the database (see requireAdminUser) so a revoked administrator loses
+ * access at their next request rather than at their cookie's expiry.
+ *
+ * Built on Web Crypto rather than node:crypto because verification runs in
+ * middleware, which Next executes on the Edge runtime where node builtins do
+ * not exist. Password hashing is argon2 and deliberately does NOT live here —
+ * it is a native module and runs only in Node-side code.
  */
 
 const COOKIE = 'ga_admin'
 const SESSION_HOURS = 12
 
-export interface AdminEnv {
-  password: string
-  secret: string
-}
-
 /**
- * Reads the configuration, refusing to run half-secured.
+ * Reads the signing secret, refusing to run half-secured.
  *
- * A missing password in production is a fatal misconfiguration, not a reason to
+ * A missing secret in production is a fatal misconfiguration, not a reason to
  * fall back to open access — "defaults to unlocked" is the failure mode that
  * puts an unauthenticated money surface on the internet.
  */
-export function adminEnv(): AdminEnv | null {
-  const password = process.env.ADMIN_PASSWORD
+export function adminSecret(): string | null {
   const secret = process.env.ADMIN_SESSION_SECRET
 
-  if (!password || !secret) {
+  if (!secret) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
-        'ADMIN_PASSWORD and ADMIN_SESSION_SECRET are required. The admin dashboard can change ' +
-        'fees and resolve disputes; it must not run unauthenticated.',
+        'ADMIN_SESSION_SECRET is required. The admin dashboard can change fees and resolve ' +
+        'disputes; it must not run unauthenticated.',
       )
     }
     return null
@@ -48,51 +49,61 @@ export function adminEnv(): AdminEnv | null {
   if (secret.length < 32) {
     throw new Error('ADMIN_SESSION_SECRET must be at least 32 characters')
   }
-  return { password, secret }
+  return secret
 }
 
 export function sessionCookieName(): string {
   return COOKIE
 }
 
-/** Issues a session token: expiry and a nonce, plus an HMAC over both. */
-export async function issueSession(secret: string, now = new Date()): Promise<string> {
-  const expiresAt = now.getTime() + SESSION_HOURS * 3_600_000
-  const nonce = randomHex(8)
-  const payload = `${expiresAt}.${nonce}`
-  return `${payload}.${await sign(secret, payload)}`
-}
-
-export async function verifySession(
-  secret: string,
-  token: string | undefined,
-  now = new Date(),
-): Promise<boolean> {
-  if (!token) return false
-  const parts = token.split('.')
-  if (parts.length !== 3) return false
-
-  const [expiresAt, nonce, signature] = parts as [string, string, string]
-  const expected = await sign(secret, `${expiresAt}.${nonce}`)
-  if (!constantTimeEqual(expected, signature)) return false
-
-  const expiry = Number(expiresAt)
-  return Number.isFinite(expiry) && expiry > now.getTime()
+export function sessionMaxAgeSeconds(): number {
+  return SESSION_HOURS * 3600
 }
 
 /**
- * Compares the submitted password without leaking its length or prefix.
+ * Issues a session naming the administrator it belongs to.
  *
- * Hashed first so the comparison is always over two equal-length strings; a
- * direct comparison returns early on the first wrong byte, and that is
- * measurable.
+ * The user id is inside the signed payload rather than alongside it, so it
+ * cannot be swapped for another administrator's id without invalidating the
+ * signature. That is the whole point of carrying identity in the cookie.
  */
-export async function passwordMatches(expected: string, submitted: string): Promise<boolean> {
-  const [a, b] = await Promise.all([
-    sign('password-compare', expected),
-    sign('password-compare', submitted),
-  ])
-  return constantTimeEqual(a, b)
+export async function issueSession(
+  secret: string,
+  userId: string,
+  now = new Date(),
+): Promise<string> {
+  if (userId.includes('.')) throw new Error('User id must not contain a dot')
+  const expiresAt = now.getTime() + SESSION_HOURS * 3_600_000
+  const nonce = randomHex(8)
+  const payload = `${userId}.${expiresAt}.${nonce}`
+  return `${payload}.${await sign(secret, payload)}`
+}
+
+/**
+ * Returns the administrator's user id, or null if the token is not trustworthy.
+ *
+ * Returning the id rather than a boolean is what lets callers act as a person.
+ * It is still only an assertion of identity — see the note at the top about
+ * re-reading the user before doing anything that matters.
+ */
+export async function readSession(
+  secret: string,
+  token: string | undefined,
+  now = new Date(),
+): Promise<string | null> {
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 4) return null
+
+  const [userId, expiresAt, nonce, signature] = parts as [string, string, string, string]
+  if (userId === '') return null
+
+  const expected = await sign(secret, `${userId}.${expiresAt}.${nonce}`)
+  if (!constantTimeEqual(expected, signature)) return null
+
+  const expiry = Number(expiresAt)
+  if (!Number.isFinite(expiry) || expiry <= now.getTime()) return null
+  return userId
 }
 
 async function sign(secret: string, payload: string): Promise<string> {
