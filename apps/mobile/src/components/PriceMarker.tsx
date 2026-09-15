@@ -1,7 +1,15 @@
 import { memo } from 'react'
 import { Text, View, Pressable, StyleSheet } from 'react-native'
 import { mapMarker, radius, minTouchTarget } from '@grassassassin/design'
+
 import type { MarkerVariant } from '@/lib/jobs'
+
+/**
+ * The floor every platform must clear, as opposed to minTouchTarget (48), which
+ * is the target we aim for where layout allows. A map is dense enough that
+ * padding every pill to 48 starts merging neighbouring markers.
+ */
+const MIN_TAP = 44
 
 /**
  * A map marker.
@@ -10,9 +18,15 @@ import type { MarkerVariant } from '@/lib/jobs'
  * question — "what can I make money on right now?" — so price leads and nothing
  * competes with it.
  *
- * Wrapped in a transparent hit area so the tap target clears 48pt even though
- * the visible pill is ~32pt. The primary action here is taken one-handed,
- * outdoors, possibly wearing gloves.
+ * Wrapped in a transparent hit area so the tap target clears the minimum even
+ * though the visible pill is ~32pt. The primary action here is taken
+ * one-handed, outdoors, possibly wearing gloves.
+ *
+ * That area is real PADDING, not hitSlop. hitSlop is honoured by iOS and
+ * Android and ignored by React Native Web, so the pill was a 37px target in a
+ * browser while the comment here claimed 48 — and the audit, which measures the
+ * DOM, was right to call it. Padding is the one mechanism all three platforms
+ * agree on.
  */
 export interface PriceMarkerProps {
   label: string
@@ -34,7 +48,14 @@ export const PriceMarker = memo(function PriceMarker({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? `${label} job`}
       hitSlop={Math.max(0, (minTouchTarget - style.height) / 2)}
-      style={styles.hit}
+      style={[
+        styles.hit,
+        {
+          paddingVertical: Math.max(0, (MIN_TAP - style.height) / 2),
+          // A short label like "$42" makes a pill narrower than it is tall.
+          minWidth: MIN_TAP,
+        },
+      ]}
     >
       <View
         style={[

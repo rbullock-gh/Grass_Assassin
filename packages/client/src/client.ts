@@ -462,6 +462,50 @@ export class GrassAssassinClient {
   deregisterDevice(pushToken: string) {
     return this.request<void>('DELETE', '/v1/devices', { body: { pushToken } })
   }
+
+  // --- safety --------------------------------------------------------------
+
+  /**
+   * Reports a person to a human reviewer.
+   *
+   * Blocks them too unless told otherwise: somebody reporting a person they
+   * felt unsafe around almost always also wants to stop being matched, and
+   * making that a second step is asking them to do paperwork about it.
+   */
+  report(input: {
+    subjectUserId: string
+    category: string
+    description: string
+    jobId?: string
+    alsoBlock?: boolean
+  }) {
+    return this.request<ReportFiled>('POST', '/v1/reports', { body: input })
+  }
+
+  blocks() {
+    return this.request<{ blocks: BlockedPerson[] }>('GET', '/v1/blocks')
+  }
+
+  blockUser(blockedUserId: string, reason?: string) {
+    return this.request<{ blocked: true }>('POST', '/v1/blocks', { body: { blockedUserId, reason } })
+  }
+
+  unblockUser(userId: string) {
+    return this.request<void>('DELETE', `/v1/blocks/${userId}`)
+  }
+}
+
+export interface ReportFiled {
+  report: { id: string; status: string; createdAt: string }
+  blocked: boolean
+  message: string
+}
+
+export interface BlockedPerson {
+  id: string
+  createdAt: string
+  reason: string | null
+  blocked: { id: string; firstName: string; avatarUrl: string | null }
 }
 
 // --- response shapes -------------------------------------------------------
@@ -629,7 +673,10 @@ export interface CancellationPreview {
 }
 
 export interface WorkerPublicProfile {
-  id: string; firstName: string; avatarUrl: string | null; bio: string | null
+  id: string
+  /** The person behind the profile. Needed to report or block them. */
+  userId: string
+  firstName: string; avatarUrl: string | null; bio: string | null
   rank: { key: string; name: string; verifiedBadge: boolean; colorHex: string | null } | null
   points: number; completedJobs: number
   rating: number | null; ratingCount: number

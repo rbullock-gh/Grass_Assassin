@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Pressable } from 'react-native'
+import { useLocalSearchParams, router } from 'expo-router'
 import type { WorkerPublicProfile } from '@grassassassin/client'
 import { api } from '@/lib/api'
-import { useColors, useIsDark, space, radius, textStyles, rankVisuals } from '@/lib/theme'
+import { useColors, useIsDark, space, radius, textStyles, rankVisuals, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 
 /**
@@ -145,6 +145,29 @@ export default function WorkerProfileScreen() {
           ))}
         </Panel>
       ) : null}
+
+      {/*
+        * Last, quiet, and present.
+        *
+        * A profile is where somebody decides whether to let this person onto
+        * their property, so it is where "something is wrong with this person"
+        * has to be reachable. Placed at the end and in plain text because
+        * a prominent red button on a profile invites idle use, and every idle
+        * report costs a reviewer the time a real one needed.
+        */}
+      <Pressable
+        onPress={() => router.push({
+          pathname: '/(shared)/report-person/[userId]',
+          params: { userId: profile.userId, name: profile.firstName },
+        })}
+        accessibilityRole="button"
+        accessibilityLabel={`Report ${profile.firstName}`}
+        style={styles.report}
+      >
+        <Text style={[textStyles.caption, { color: c.textTertiary, fontWeight: '700' }]}>
+          Report {profile.firstName}
+        </Text>
+      </Pressable>
     </ScrollView>
   )
 }
@@ -193,4 +216,5 @@ const styles = StyleSheet.create({
   panel: { borderWidth: 1, borderRadius: radius.lg, padding: space[4], gap: space[3] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   chip: { borderWidth: 1, borderRadius: radius.full, paddingHorizontal: space[3], paddingVertical: space[1] },
+  report: { minHeight: minTouchTarget, alignItems: 'center', justifyContent: 'center' },
 })

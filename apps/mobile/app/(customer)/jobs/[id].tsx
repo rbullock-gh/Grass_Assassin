@@ -183,7 +183,7 @@ export default function CustomerJobScreen() {
       ]}
     >
       <View style={[styles.panel, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <Text style={[textStyles.overline, { color: status.needsYou ? c.warning : c.textTertiary }]}>
+        <Text style={[textStyles.overline, { color: status.needsYou ? c.warningInk : c.textTertiary }]}>
           {status.pill}
         </Text>
         <Text style={[textStyles.heading, { color: c.textPrimary }]}>{status.label}</Text>
@@ -192,7 +192,7 @@ export default function CustomerJobScreen() {
           {job.status === 'POSTED' ? ` · needed ${formatDeadline(job.dueAt)}` : ''}
         </Text>
         {notice ? (
-          <Text style={[textStyles.caption, { color: c.warning, marginTop: space[2] }]}>{notice}</Text>
+          <Text style={[textStyles.caption, { color: c.warningInk, marginTop: space[2] }]}>{notice}</Text>
         ) : null}
       </View>
 

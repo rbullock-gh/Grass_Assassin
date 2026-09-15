@@ -322,7 +322,7 @@ export default function WorkerMapScreen() {
           onPress={() => void Location.requestForegroundPermissionsAsync()}
           style={[styles.banner, { backgroundColor: c.warningSubtle }]}
         >
-          <Text style={{ color: c.warning, fontSize: 12.5, fontWeight: '600' }}>
+          <Text style={{ color: c.warningInk, fontSize: 12.5, fontWeight: '600' }}>
             Location is off — showing jobs in your service area. Tap to enable.
           </Text>
         </Pressable>

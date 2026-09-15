@@ -58,7 +58,10 @@ const PAGES = [
   { name: 'jobs', path: '/jobs', requires: 'table' },
   { name: 'workers', path: '/workers', requires: 'table' },
   { name: 'disputes', path: '/disputes', requires: 'form.resolve-form' },
-  { name: 'reports', path: '/reports', requires: '.panel' },
+  // The decision form, not just "a panel". `.panel` was true of the page with
+  // the moderation UI entirely absent, which is the shape of a check that
+  // passes while looking at nothing.
+  { name: 'reports', path: '/reports', requires: '.decision-card form.resolve-form' },
   { name: 'payments', path: '/payments', requires: '.panel' },
   { name: 'config', path: '/config', requires: 'input[name="fees.worker_commission_bps"]' },
 ]

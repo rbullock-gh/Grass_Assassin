@@ -90,6 +90,15 @@ export async function registerWorkerRoutes(app: FastifyInstance, deps: ServerDep
     // profile is a reputation surface, not a contact card.
     return {
       id: worker.id,
+      /*
+       * The person behind the profile, so the app can report or block them.
+       *
+       * An opaque id and nothing more — no email, no phone, no location, which
+       * is the rule this whole response follows. Without it the app has a
+       * profile it cannot act on, which is how a safety feature ends up
+       * reachable from exactly one screen.
+       */
+      userId: worker.userId,
       firstName: worker.user.firstName,
       avatarUrl: worker.user.avatarUrl,
       bio: worker.bio,

@@ -46,10 +46,17 @@ const MOBILE_SCREENS = [
   { name: 'cust-home', path: '/home', as: 'customer' },
   { name: 'post', path: '/post', as: 'customer' },
   { name: 'payment-methods', path: '/payment-methods', as: 'customer' },
-  { name: 'worker-map', path: '/map', as: 'worker' },
+  /*
+   * settleMs, because the map's "Location is off" banner appears only after
+   * the location fallback fires at 6s. Auditing at 500ms had never once seen
+   * it — and when finally measured it was 2.86:1, the least readable thing in
+   * the product, on the screen a worker looks at most.
+   */
+  { name: 'worker-map', path: '/map', as: 'worker', settleMs: 8000 },
   { name: 'earnings', path: '/earnings', as: 'worker' },
   { name: 'payouts', path: '/payouts', as: 'worker' },
   { name: 'leaderboard', path: '/leaderboard', as: 'worker' },
+  { name: 'report-person', path: '/report-person/someone?name=Riley', as: 'customer' },
 ]
 
 const ADMIN_PAGES = [
@@ -58,6 +65,7 @@ const ADMIN_PAGES = [
   { name: 'disputes', path: '/disputes' },
   { name: 'config', path: '/config' },
   { name: 'jobs', path: '/jobs' },
+  { name: 'reports', path: '/reports' },
 ]
 
 /**
@@ -167,6 +175,16 @@ const AUDIT = (opts = {}) => {
     return box.width > 0 && box.height > 0
   }
 
+  /**
+   * Hidden from assistive technology, on purpose.
+   *
+   * A control marked aria-hidden is decoration with a bigger control wrapped
+   * around it — the switch inside a pressable row, say. It is neither a tap
+   * target nor a thing that needs a name, and reporting it as both sends
+   * somebody off to "fix" a control that is already correct.
+   */
+  const ariaHidden = (el) => el.closest('[aria-hidden="true"]') !== null
+
   const describe = (el) => {
     const text = (el.textContent ?? '').trim().slice(0, 40)
     const id = el.id ? `#${el.id}` : ''
@@ -226,7 +244,7 @@ const AUDIT = (opts = {}) => {
     'button, a[href], input, select, textarea, [role="button"], [role="radio"], [role="link"], [role="tab"], [role="checkbox"], [role="switch"]',
   )
   for (const el of interactive) {
-    if (!visible(el)) continue
+    if (!visible(el) || ariaHidden(el)) continue
     const box = el.getBoundingClientRect()
 
     // Hidden inputs behind a styled label are the normal pattern and are fine.
@@ -237,8 +255,11 @@ const AUDIT = (opts = {}) => {
     if (!proxied && (box.height < 44 || box.width < 44)) {
       findings.targets.push({
         el: describe(el),
-        width: Math.round(box.width),
-        height: Math.round(box.height),
+        // One decimal, not rounded. A 43.5px target printed as "44×49px" reads
+        // like the checker is broken rather than like the element being half a
+        // pixel short of the line.
+        width: Number(box.width.toFixed(1)),
+        height: Number(box.height.toFixed(1)),
       })
     }
 
@@ -403,7 +424,7 @@ async function main() {
       }
 
       await page.goto(base + target.path, { waitUntil: 'networkidle' })
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(target.settleMs ?? 500)
 
       /*
        * Refuse to audit a page that is not wearing its stylesheet.

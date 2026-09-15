@@ -141,7 +141,7 @@ createdb grassassassin_test
 DATABASE_URL=postgresql://user:pass@localhost:5432/grassassassin_test \
   pnpm --filter @grassassassin/api db:deploy
 
-pnpm -r test        # 941 tests; the API suite needs the test database
+pnpm -r test        # 1,019 tests; the API suite needs the test database
 pnpm -r typecheck
 
 pnpm dev:api        # http://localhost:4000 — /health, /v1/categories, /v1/leaderboard

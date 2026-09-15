@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TextInput, Pressable, ActivityIndicator,
   KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, router } from 'expo-router'
 import { MAX_MESSAGE_LENGTH } from '@grassassassin/shared'
 import type { ChatMessage, MessageThread } from '@grassassassin/client'
 import { api } from '@/lib/api'
@@ -99,6 +99,31 @@ export default function MessagesScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
     >
+      {/*
+        * Reporting lives in the thread, not only on a profile.
+        *
+        * The conversation is where somebody is when it goes wrong, and a
+        * safety valve two screens away from the moment is a safety valve
+        * nobody reaches for.
+        */}
+      <Pressable
+        onPress={() => router.push({
+          pathname: '/(shared)/report-person/[userId]',
+          params: {
+            userId: thread.counterpart.id,
+            name: thread.counterpart.firstName,
+            jobId,
+          },
+        })}
+        accessibilityRole="button"
+        accessibilityLabel={`Report ${thread.counterpart.firstName}`}
+        style={[styles.reportBar, { borderBottomColor: c.border }]}
+      >
+        <Text style={[textStyles.caption, { color: c.textSecondary, fontWeight: '700' }]}>
+          Report {thread.counterpart.firstName}
+        </Text>
+      </Pressable>
+
       <FlatList
         ref={listRef}
         data={thread.messages}
@@ -127,13 +152,13 @@ export default function MessagesScreen() {
 
       {notice ? (
         <Pressable onPress={() => setNotice(null)} style={[styles.notice, { backgroundColor: c.warningSubtle }]}>
-          <Text style={{ color: c.warning, fontSize: 12.5, fontWeight: '600' }}>{notice}</Text>
+          <Text style={{ color: c.warningInk, fontSize: 12.5, fontWeight: '600' }}>{notice}</Text>
         </Pressable>
       ) : null}
 
       {error ? (
         <View style={[styles.notice, { backgroundColor: c.dangerSubtle }]}>
-          <Text style={{ color: c.danger, fontSize: 12.5, fontWeight: '600' }}>{error}</Text>
+          <Text style={{ color: c.dangerInk, fontSize: 12.5, fontWeight: '600' }}>{error}</Text>
         </View>
       ) : null}
 
@@ -224,6 +249,10 @@ function Bubble({ message, mine, showTime }: {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space[5] },
+  reportBar: {
+    minHeight: minTouchTarget, borderBottomWidth: 1,
+    alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: space[4],
+  },
   list: { padding: space[4], gap: space[2], flexGrow: 1, justifyContent: 'flex-end' },
   empty: { paddingVertical: space[8], paddingHorizontal: space[4] },
   bubble: { maxWidth: '82%', paddingHorizontal: space[3], paddingVertical: space[2], borderRadius: radius.lg },

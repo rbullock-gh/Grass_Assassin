@@ -96,7 +96,7 @@ export default function CustomerHomeScreen() {
       </Pressable>
 
       {error ? (
-        <Text style={[textStyles.body, { color: c.danger, marginTop: space[4] }]}>{error}</Text>
+        <Text style={[textStyles.body, { color: c.dangerInk, marginTop: space[4] }]}>{error}</Text>
       ) : null}
 
       {jobs === null ? (
@@ -212,7 +212,7 @@ function JobCard({ job }: { job: JobSummary }) {
               fontSize: 11,
               fontWeight: '800',
               letterSpacing: 0.3,
-              color: status.needsYou ? c.warning : status.tone === 'live' ? c.brand : c.textTertiary,
+              color: status.needsYou ? c.warningInk : status.tone === 'live' ? c.brand : c.textTertiary,
             }}
           >
             {status.pill}

@@ -45,7 +45,7 @@ export function Input({ label, error, hint, ...props }: {
         ]}
       />
       {error ? (
-        <Text style={[styles.message, { color: c.danger }]}>{error}</Text>
+        <Text style={[styles.message, { color: c.dangerInk }]}>{error}</Text>
       ) : hint ? (
         <Text style={[styles.message, { color: c.textTertiary }]}>{hint}</Text>
       ) : null}

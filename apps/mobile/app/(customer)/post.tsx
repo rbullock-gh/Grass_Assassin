@@ -162,7 +162,7 @@ export default function PostJobScreen() {
         ) : null}
 
         {showErrors && validation.message ? (
-          <Text style={[styles.error, { color: c.danger }]}>{validation.message}</Text>
+          <Text style={[styles.error, { color: c.dangerInk }]}>{validation.message}</Text>
         ) : null}
       </ScrollView>
 
@@ -510,7 +510,7 @@ function PriceStep({ draft, guidance, onChange }: {
   const cost = costBreakdown(price, SERVICE_FEE_BPS, SERVICE_FEE_MIN_CENTS)
 
   const toneColor = feedback?.tone === 'good' ? c.success
-    : feedback?.tone === 'fair' ? c.warning
+    : feedback?.tone === 'fair' ? c.warningInk
     : c.danger
 
   return (

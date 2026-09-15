@@ -176,7 +176,7 @@ export default function WorkerSetupScreen() {
         ) : null}
 
         {showError && validation.message ? (
-          <Text style={[textStyles.body, { color: c.danger, marginTop: space[4] }]}>
+          <Text style={[textStyles.body, { color: c.dangerInk, marginTop: space[4] }]}>
             {validation.message}
           </Text>
         ) : null}

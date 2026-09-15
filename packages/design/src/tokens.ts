@@ -108,6 +108,21 @@ export const semanticLight = {
   info:             palette.blue500,
   infoSubtle:       palette.blue100,
 
+  /**
+   * Text on the matching *Subtle surface.
+   *
+   * The semantic colours above are for icons, borders and fills — shapes, not
+   * sentences. Used as TEXT on their own wash they were, in light mode:
+   * warning 2.86:1, danger 3.95:1, info 4.24:1. The worst of them was the
+   * "Location is off" banner on the worker's map, the most-seen warning in the
+   * product, and it had been shipping unreadable. Anything that puts words on a
+   * *Subtle background uses these instead.
+   */
+  successInk:       palette.green700,
+  warningInk:       '#8A5A06',
+  dangerInk:        '#A31515',
+  infoInk:          '#1D4ED8',
+
   payout:           palette.green600,
   // gold500 as rank NUMBERS on white measured 2.3:1 — the least readable thing
   // in the app sat on the leaderboard, which exists to be read.
@@ -143,6 +158,17 @@ export const semanticDark = {
   dangerSubtle:     'rgba(220, 38, 38, 0.18)',
   info:             '#60A5FA',
   infoSubtle:       'rgba(37, 99, 235, 0.18)',
+
+  /**
+   * Three of these are the semantic colour unchanged, because on a dark ground
+   * they already read. amber500 does not — 4.10:1 on its own wash — so warning
+   * is the one that lifts, which is the same colour that failed worst in light
+   * mode for the opposite reason.
+   */
+  successInk:       palette.green400,
+  warningInk:       palette.gold400,
+  dangerInk:        '#F87171',
+  infoInk:          '#60A5FA',
 
   payout:           palette.green400,
   rank:             palette.gold400,
@@ -374,9 +400,20 @@ export const mapMarker = {
     // touch target. A 30pt marker missed it by 2pt.
     height: 32, paddingHorizontal: 9, radius: radius.full,
   },
+  /**
+   * A cluster bubble.
+   *
+   * green600, not green500: white on green500 is 3.30:1, and the cluster count
+   * is 14px text, so it owes 4.5:1. It was the only marker variant missing from
+   * the contrast suite, which is why it survived the same correction every
+   * other white-on-green surface got.
+   *
+   * The smallest size is 44, not 36, for the same reason the filter chips are:
+   * this is tapped outdoors, one-handed, often with gloves on.
+   */
   cluster: {
-    background: palette.green500, text: palette.white,
-    sizes: { sm: 36, md: 44, lg: 54 },
+    background: palette.green600, text: palette.white,
+    sizes: { sm: 44, md: 48, lg: 56 },
   },
 } as const
 

@@ -120,7 +120,7 @@ export default function ReportProblemScreen() {
         </View>
 
         {showError && validation.error ? (
-          <Text style={[textStyles.body, { color: c.danger, marginTop: space[3] }]}>
+          <Text style={[textStyles.body, { color: c.dangerInk, marginTop: space[3] }]}>
             {validation.error}
           </Text>
         ) : null}

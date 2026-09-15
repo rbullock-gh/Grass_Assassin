@@ -108,7 +108,7 @@ export default function LeaderboardScreen() {
       {/* "Near me" that is not near anybody used to be served silently. */}
       {board && describeFallback(board) ? (
         <View style={[styles.notice, { backgroundColor: c.warningSubtle }]}>
-          <Text style={[textStyles.caption, { color: c.warning }]}>
+          <Text style={[textStyles.caption, { color: c.warningInk }]}>
             {describeFallback(board)}
           </Text>
         </View>

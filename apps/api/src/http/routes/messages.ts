@@ -140,6 +140,42 @@ export async function registerMessageRoutes(app: FastifyInstance, deps: ServerDe
       throw new ConflictError('CONVERSATION_CLOSED', state.reason ?? 'This conversation is closed')
     }
 
+    /*
+     * A block stops messages, not only job visibility.
+     *
+     * Job search already excluded blocked pairs from each other's maps. The
+     * thread did not, so someone who blocked a person they felt unsafe around
+     * could still be messaged by them on the job they shared — which is the
+     * conversation they were trying to get out of. Either direction of the
+     * block closes it: the person who blocked does not want to hear from them,
+     * and there is no version of this where the blocked party should be able to
+     * keep writing.
+     */
+    const blocked = await deps.db.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: identity.userId, blockedId: counterpart.id },
+          { blockerId: counterpart.id, blockedId: identity.userId },
+        ],
+      },
+      select: { blockerId: true },
+    })
+    if (blocked) {
+      /*
+       * The blocked party is told nothing — not in the message and not in the
+       * CODE, which a test caught leaking after the message had been made
+       * careful. Telling someone they have been blocked by a person whose
+       * address they know is how a safety feature becomes a provocation. From
+       * their side "closed" is also simply true.
+       */
+      throw blocked.blockerId === identity.userId
+        ? new ConflictError(
+          'CONVERSATION_BLOCKED',
+          'You blocked this person. Unblock them to send a message.',
+        )
+        : new ConflictError('CONVERSATION_CLOSED', 'This conversation is closed.')
+    }
+
     // Screened, never blocked. A flagged message is delivered and a human
     // reviews it — see the reasoning in the shared domain module.
     const screening = screenMessage(body.body)

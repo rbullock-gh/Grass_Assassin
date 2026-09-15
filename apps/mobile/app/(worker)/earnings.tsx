@@ -69,7 +69,7 @@ export default function EarningsScreen() {
     >
       <Text style={[textStyles.title, { color: c.textPrimary }]}>Earnings</Text>
 
-      {error ? <Text style={[textStyles.body, { color: c.danger }]}>{error}</Text> : null}
+      {error ? <Text style={[textStyles.body, { color: c.dangerInk }]}>{error}</Text> : null}
 
       {earnings === null ? (
         <ActivityIndicator color={c.brand} style={{ marginTop: space[7] }} />

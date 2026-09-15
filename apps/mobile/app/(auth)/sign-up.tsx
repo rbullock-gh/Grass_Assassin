@@ -87,7 +87,7 @@ export default function SignUpScreen() {
           </Text>
         ) : null}
 
-        {error ? <Text style={[styles.error, { color: c.danger }]}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, { color: c.dangerInk }]}>{error}</Text> : null}
 
         <Pressable
           onPress={() => void submit()}

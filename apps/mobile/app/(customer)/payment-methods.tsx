@@ -113,7 +113,7 @@ export default function PaymentMethodsScreen() {
     >
       <Text style={[textStyles.title, { color: c.textPrimary }]}>How you pay</Text>
 
-      {error ? <Text style={[textStyles.body, { color: c.danger }]}>{error}</Text> : null}
+      {error ? <Text style={[textStyles.body, { color: c.dangerInk }]}>{error}</Text> : null}
 
       {cards === null ? (
         <ActivityIndicator color={c.brand} style={{ marginTop: space[7] }} />
@@ -150,7 +150,7 @@ export default function PaymentMethodsScreen() {
                   {describeCard(card)}
                 </Text>
                 {attention ? (
-                  <Text style={[textStyles.caption, { color: c.danger, marginTop: 2 }]}>
+                  <Text style={[textStyles.caption, { color: c.dangerInk, marginTop: 2 }]}>
                     {attention}
                   </Text>
                 ) : card.isDefault ? (

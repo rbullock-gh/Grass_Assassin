@@ -96,7 +96,7 @@ export function PhotoCapture({ jobId, kind, existing, onUploaded }: {
         </ScrollView>
       ) : null}
 
-      {error ? <Text style={[textStyles.caption, { color: c.danger }]}>{error}</Text> : null}
+      {error ? <Text style={[textStyles.caption, { color: c.dangerInk }]}>{error}</Text> : null}
 
       <View style={styles.actions}>
         <Pressable

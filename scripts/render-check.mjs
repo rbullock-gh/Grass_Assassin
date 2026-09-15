@@ -99,6 +99,10 @@ async function main() {
     posted && { name: 'job-posted', path: `/jobs/${posted.id}`, as: customer },
     claimed && { name: 'thread', path: `/messages/${claimed.id}`, as: customer },
     claimed && { name: 'report-problem', path: `/report/${claimed.id}`, as: customer },
+    // Reporting a PERSON, which is a different screen and a different queue
+    // from disputing a job. The subject id is only used on submit — the screen
+    // fetches nothing — so any id renders the same thing.
+    { name: 'report-person', path: '/report-person/someone?name=Riley', as: customer },
   ].filter(Boolean)
 
   const browser = await launchChromium()

@@ -22,6 +22,7 @@ import { registerDevStorageRoutes } from './routes/dev-storage.js'
 import { registerAdminRoutes } from './routes/admin.js'
 import { registerBillingRoutes } from './routes/billing.js'
 import { registerDeviceRoutes } from './routes/devices.js'
+import { registerSafetyRoutes } from './routes/safety.js'
 import type { PushSender } from '../modules/notifications/notifier.js'
 import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
 
@@ -250,6 +251,32 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       })
     }
 
+    /*
+     * Fastify's own 4xx are the CLIENT's mistake, not ours.
+     *
+     * A DELETE sent with `content-type: application/json` and no body is
+     * refused by the body parser with FST_ERR_CTP_EMPTY_JSON_BODY and
+     * statusCode 400. Falling through to the catch-all below turned that into
+     * a 500 and an error-level log line reading "Unhandled error" — so a
+     * malformed request looked, to anyone watching the logs, exactly like the
+     * server breaking. Found by sending one by hand; the test suite never saw
+     * it because inject() does not set a content-type for an empty body.
+     *
+     * The code is passed through because Fastify's are already machine-
+     * readable and specific; the message is not, because Fastify's can name
+     * internals.
+     */
+    const status = (error as { statusCode?: number }).statusCode
+    if (typeof status === 'number' && status >= 400 && status < 500) {
+      request.log.info({ err: error }, 'Rejected a malformed request')
+      return reply.status(status).send({
+        error: {
+          code: (error as { code?: string }).code ?? 'BAD_REQUEST',
+          message: 'The request was not valid',
+        },
+      })
+    }
+
     // Anything unrecognised is a bug. Log the detail, tell the client nothing —
     // stack traces and driver errors are an information leak.
     request.log.error({ err: error }, 'Unhandled error')
@@ -278,6 +305,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     await registerAdminRoutes(instance, deps)
     await registerBillingRoutes(instance, deps)
     await registerDeviceRoutes(instance, deps)
+    await registerSafetyRoutes(instance, deps)
   }, { prefix: '/v1' })
 
   // Outside /v1 on purpose: this stands in for S3, which is not part of our

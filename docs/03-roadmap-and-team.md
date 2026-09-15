@@ -52,6 +52,12 @@ locks, a load test of the claim race and the map with numbers written down
 (`docs/04-deployment.md`), and an accessibility audit that measures what is actually
 painted — both apps are at zero findings and the audit runs in CI.
 
+Also closed since: push notifications actually deliver (device registration, an
+Expo adapter that prunes dead tokens, and the app side), and the trust-and-safety
+loop is joined up — a person can be reported and blocked, blocks are enforced in
+job search AND messaging, and an administrator can act on a report from a queue
+that is no longer permanently empty.
+
 Not started: the EAS build pipeline, monitoring, runbooks, and everything legal
 — worker classification, insurance, ToS, privacy policy. Legal is the item most
 likely to actually gate a launch, and it is the one item on this list that no

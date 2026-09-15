@@ -73,7 +73,24 @@ describe('map markers stay legible at a glance', () => {
     ['featured', mapMarker.featured],
     ['urgent', mapMarker.urgent],
     ['claimed', mapMarker.claimed],
+    // The cluster was missing from this list, so white-on-green500 at 3.30:1
+    // shipped on the busiest part of the map. A list of cases is only a check
+    // for the cases on it.
+    ['cluster', mapMarker.cluster],
   ] as const
+
+  it('every cluster size can be tapped', () => {
+    for (const [name, size] of Object.entries(mapMarker.cluster.sizes)) {
+      expect(size, `cluster ${name} is ${size}px`).toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  it('the cluster count is normal-size text, so it owes 4.5:1', () => {
+    // 14px. The other markers are pills whose label is large enough for the
+    // 3:1 threshold; this one is not, and was checked as though it were.
+    const ratio = contrastRatio(mapMarker.cluster.text, mapMarker.cluster.background)
+    expect(ratio, `cluster: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+  })
 
   for (const [name, marker] of markers) {
     it(`${name} marker text passes AA large`, () => {
@@ -83,17 +100,79 @@ describe('map markers stay legible at a glance', () => {
     })
   }
 
-  it('cluster bubbles are legible', () => {
-    expect(contrastRatio(mapMarker.cluster.text, mapMarker.cluster.background))
-      .toBeGreaterThanOrEqual(CONTRAST_AA_LARGE)
-  })
-
-  it('gives every marker a touch target at or above the 48pt minimum once padded', () => {
+  it('gives every pill marker a touch target at or above the 48pt minimum once padded', () => {
+    // The cluster is not a pill and has no `height` — it is sized by `sizes`,
+    // and checked separately above. Including it here read as coverage while
+    // asserting `undefined + 16`, which is NaN and passes nothing.
     for (const [name, marker] of markers) {
-      // Markers render inside a transparent hit slop; the visual height plus
-      // 8pt slop each side must clear the minimum.
+      if (!('height' in marker)) continue
       expect(marker.height + 16, `${name}`).toBeGreaterThanOrEqual(minTouchTarget)
     }
+  })
+})
+
+describe('text on a subtle surface', () => {
+  /**
+   * The *Subtle colours are backgrounds for banners, pills and notices, and
+   * something always ends up written on them. Using the matching semantic
+   * colour for that text measured, in light mode: warning 2.86:1, danger
+   * 3.95:1, info 4.24:1 — all failures, and the worst of them was the
+   * "Location is off" banner on the worker's map. It had shipped.
+   *
+   * So there are now *Ink tokens, and this is the check that keeps them honest.
+   */
+  const pairs = [
+    ['success', 'successInk', 'successSubtle'],
+    ['warning', 'warningInk', 'warningSubtle'],
+    ['danger', 'dangerInk', 'dangerSubtle'],
+    ['info', 'infoInk', 'infoSubtle'],
+  ] as const
+
+  /** Flattens an rgba() wash onto the surface it is painted over. */
+  function composite(value: string, surface: string): string {
+    const match = value.match(/rgba?\(([^)]+)\)/)
+    if (!match) return value
+    const [r, g, b, a = '1'] = match[1]!.split(',').map((n) => Number(n.trim()))
+    const alpha = Number(a)
+    const base = surface.replace('#', '')
+    const channel = (offset: number) => parseInt(base.slice(offset, offset + 2), 16)
+    const mix = (fg: number, bg: number) => Math.round(fg * alpha + bg * (1 - alpha))
+    const hex = (n: number) => n.toString(16).padStart(2, '0')
+    return `#${hex(mix(r!, channel(0)))}${hex(mix(g!, channel(2)))}${hex(mix(b!, channel(4)))}`
+  }
+
+  it.each([['light', semanticLight], ['dark', semanticDark]] as const)(
+    '%s: every ink reads on its own wash', (name, theme) => {
+      for (const [label, inkKey, subtleKey] of pairs) {
+        const background = composite(theme[subtleKey], theme.surface)
+        const ratio = contrastRatio(theme[inkKey], background)
+        expect(ratio, `${name} ${label}: ${theme[inkKey]} on ${background} is ${ratio.toFixed(2)}:1`)
+          .toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+      }
+    },
+  )
+
+  it.each([['light', semanticLight], ['dark', semanticDark]] as const)(
+    '%s: every ink also reads directly on the surface', (name, theme) => {
+      // A notice is not always given its wash — an inline "3 more characters"
+      // in danger ink sits on the plain surface.
+      for (const [label, inkKey] of pairs) {
+        const ratio = contrastRatio(theme[inkKey], theme.surface)
+        expect(ratio, `${name} ${label}: ${theme[inkKey]} on surface is ${ratio.toFixed(2)}:1`)
+          .toBeGreaterThanOrEqual(CONTRAST_AA_NORMAL)
+      }
+    },
+  )
+
+  it('keeps the ink distinguishable from the plain semantic colour where it had to move', () => {
+    // If an ink is identical to its semantic colour in BOTH themes, it did not
+    // fix anything and is dead weight pretending to be a safeguard.
+    const moved = pairs.filter(([, inkKey, ]) => {
+      const key = inkKey.replace('Ink', '') as 'success' | 'warning' | 'danger' | 'info'
+      return semanticLight[inkKey] !== semanticLight[key]
+        || semanticDark[inkKey] !== semanticDark[key]
+    })
+    expect(moved.length).toBeGreaterThanOrEqual(3)
   })
 })
 

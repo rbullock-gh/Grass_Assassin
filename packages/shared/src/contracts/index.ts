@@ -306,6 +306,50 @@ export const tipSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// Safety: reporting and blocking
+// ---------------------------------------------------------------------------
+
+/**
+ * What someone is reporting.
+ *
+ * Written for a marketplace where a stranger comes onto private property with
+ * equipment, so the list leads with the things that actually endanger people
+ * rather than with billing. IMPERSONATION is here because "somebody other than
+ * the pro I booked turned up" is specific to this product and is the report
+ * most worth acting on quickly.
+ */
+export const REPORT_CATEGORIES = [
+  'UNSAFE_BEHAVIOUR',
+  'HARASSMENT',
+  'PROPERTY_DAMAGE',
+  'IMPERSONATION',
+  'OFF_PLATFORM_PAYMENT',
+  'NO_SHOW',
+  'OTHER',
+] as const
+export type ReportCategory = (typeof REPORT_CATEGORIES)[number]
+
+export const createReportSchema = z.object({
+  subjectUserId: cuidSchema,
+  category: z.enum(REPORT_CATEGORIES),
+  /**
+   * Required, and with a floor. "bad" tells a reviewer nothing, and a report a
+   * reviewer cannot act on wastes the one queue that exists for safety.
+   */
+  description: z.string().trim().min(20).max(2000),
+  jobId: cuidSchema.optional(),
+  /** Filing a report usually means you also want to stop being matched. */
+  alsoBlock: z.boolean().default(true),
+})
+export type CreateReportInput = z.infer<typeof createReportSchema>
+
+export const createBlockSchema = z.object({
+  blockedUserId: cuidSchema,
+  reason: z.string().trim().max(500).optional(),
+})
+export type CreateBlockInput = z.infer<typeof createBlockSchema>
+
+// ---------------------------------------------------------------------------
 // Devices
 // ---------------------------------------------------------------------------
 

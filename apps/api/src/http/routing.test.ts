@@ -106,6 +106,52 @@ describe('literal routes are not shadowed by parameterised siblings', () => {
   })
 })
 
+describe('a client mistake is reported as a client mistake', () => {
+  /**
+   * Fastify rejects some requests before any handler runs, with its own error
+   * carrying a 4xx statusCode. Those used to fall through to the catch-all and
+   * come back as 500 INTERNAL_ERROR, logged at error level as "Unhandled
+   * error" — so a malformed request was indistinguishable, in the logs and to
+   * the caller, from the server falling over.
+   *
+   * Found by hand, sending a DELETE from a script. inject() does not set a
+   * content-type for an empty body, so no test had ever produced one.
+   */
+  it('answers an empty JSON body with 400, not 500', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/v1/blocks/someone',
+      headers: { authorization: 'Bearer nonsense', 'content-type': 'application/json' },
+    })
+    expect(response.statusCode).not.toBe(500)
+    expect(response.statusCode).toBeGreaterThanOrEqual(400)
+    expect(response.statusCode).toBeLessThan(500)
+  })
+
+  it('answers unparseable JSON with 400, not 500', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      headers: { 'content-type': 'application/json' },
+      payload: '{"email": "nope"',
+    })
+    expect(response.statusCode).toBe(400)
+    expect(response.json().error.code).toBeTruthy()
+  })
+
+  it('still says nothing revealing in the message', async () => {
+    // The code is passed through because Fastify's are machine-readable. The
+    // message is not, because Fastify's can name internals.
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      headers: { 'content-type': 'application/json' },
+      payload: '{ broken',
+    })
+    expect(response.json().error.message).toBe('The request was not valid')
+  })
+})
+
 describe('every route requires the authentication it should', () => {
   // A route that forgets requireIdentity leaks data to anyone with the URL.
   const protectedRoutes: Array<[string, string, unknown?]> = [

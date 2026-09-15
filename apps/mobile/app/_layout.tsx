@@ -51,6 +51,9 @@ export default function RootLayout() {
             <Stack.Screen name="(customer)/jobs/[id]" options={{ title: 'Your job' }} />
             <Stack.Screen name="(customer)/properties/new" options={{ title: 'Add a property' }} />
             <Stack.Screen name="(customer)/report/[id]" options={{ title: 'Report a problem' }} />
+            {/* About a PERSON, not a job — a different queue with different
+                consequences, so a different screen. */}
+            <Stack.Screen name="(shared)/report-person/[userId]" options={{ title: 'Report someone' }} />
 
             {/* One thread per job, reachable from either side. */}
             <Stack.Screen name="(shared)/messages/index" options={{ title: 'Messages' }} />

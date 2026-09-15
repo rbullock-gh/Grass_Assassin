@@ -153,6 +153,14 @@ export interface CreateJobOptions {
   isFeatured?: boolean
   postedAt?: Date
   title?: string
+  /**
+   * Required with status CLAIMED or CLAIM_PENDING_PAYMENT.
+   *
+   * The database enforces it — jobs_claimed_requires_worker — which is exactly
+   * the constraint you want and which this factory used to violate, so any test
+   * needing a claimed job had to build one by hand.
+   */
+  claimedByWorkerId?: string
 }
 
 export async function createJob(opts: CreateJobOptions) {
@@ -183,7 +191,17 @@ export async function createJob(opts: CreateJobOptions) {
   if (opts.isPremium !== undefined) patch['isPremium'] = opts.isPremium
   if (opts.isFeatured !== undefined) patch['isFeatured'] = opts.isFeatured
   if (opts.postedAt !== undefined) patch['postedAt'] = opts.postedAt
-  if (status === 'CLAIM_PENDING_PAYMENT' || status === 'CLAIMED') patch['status'] = status
+  if (status === 'CLAIM_PENDING_PAYMENT' || status === 'CLAIMED') {
+    if (!opts.claimedByWorkerId) {
+      throw new Error(
+        `createJob({ status: '${status}' }) needs claimedByWorkerId — the database ` +
+        'refuses a claimed job with no worker, and rightly so.',
+      )
+    }
+    patch['status'] = status
+    patch['claimedByWorkerId'] = opts.claimedByWorkerId
+    patch['claimedAt'] = new Date()
+  }
   if (Object.keys(patch).length > 0) {
     await prisma.job.update({ where: { id }, data: patch as never })
   }

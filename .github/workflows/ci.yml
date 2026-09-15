@@ -280,6 +280,12 @@ jobs:
       - name: Open a dispute for the render check to draw
         run: pnpm --filter @grassassassin/api exec tsx prisma/open-dispute.ts
 
+      # Same reason: without an open report, the moderation form — the control
+      # that suspends somebody's account — is simply not on the page, and every
+      # check of it passes by looking at nothing.
+      - name: File a report for the render check to draw
+        run: pnpm --filter @grassassassin/api exec tsx prisma/open-report.ts
+
       - name: Every admin page at every width, in both themes
         run: node scripts/admin-render-check.mjs
 

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { relativeTime, titleCase } from '@/lib/format'
+import { ReportForm } from './report-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,7 +75,53 @@ export default async function ReportsPage() {
         </div>
       </div>
 
-      <section className="panel">
+      {/*
+        * The decision queue sits OUTSIDE the table, deliberately.
+        *
+        * The disputes page learned this the hard way: a form inside
+        * .table-wrap lives in a horizontally scrolling box, which on a phone
+        * means the radio buttons and the textarea are somewhere off to the
+        * right. Nobody moderates a safety report on a desktop only because we
+        * assumed they would.
+        */}
+      {openReports.length > 0 ? (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Awaiting a decision</h2>
+            <span>{openReports.length} {openReports.length === 1 ? 'report' : 'reports'}</span>
+          </div>
+          <div className="decision-queue">
+            {openReports.map((report) => (
+              <article key={report.id} className="decision-card">
+                <header>
+                  <div>
+                    <h3>{titleCase(report.category)}</h3>
+                    <p className="muted">
+                      about {report.subject.firstName} ·
+                      reported by {report.reporter.firstName} ·
+                      {' '}{relativeTime(report.createdAt)}
+                    </p>
+                  </div>
+                  <span className="pill neutral">
+                    {report.subject.workerProfile
+                      ? `${report.subject.workerProfile.completedJobs} jobs${
+                          report.subject.workerProfile.averageRating
+                            ? ` · ★ ${report.subject.workerProfile.averageRating.toFixed(1)}`
+                            : ''}`
+                      : 'Customer'}
+                  </span>
+                </header>
+
+                <p className="decision-reason">{report.description}</p>
+
+                <ReportForm reportId={report.id} subjectName={report.subject.firstName} />
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="panel" style={{ marginTop: openReports.length > 0 ? 18 : 0 }}>
         <div className="panel-head">
           <h2>Reports</h2>
           <span>{reports.length} shown</span>
@@ -87,7 +134,7 @@ export default async function ReportsPage() {
               <thead>
                 <tr>
                   <th>Reported</th><th>Category</th><th>Detail</th>
-                  <th>By</th><th>Status</th><th>Raised</th>
+                  <th>By</th><th>Status</th><th>Outcome</th><th>Raised</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,6 +163,7 @@ export default async function ReportsPage() {
                           : report.status === 'ACTIONED' ? 'success' : 'neutral'
                       }`}>{titleCase(report.status)}</span>
                     </td>
+                    <td className="muted">{report.action ?? '—'}</td>
                     <td className="muted">{relativeTime(report.createdAt)}</td>
                   </tr>
                 ))}
