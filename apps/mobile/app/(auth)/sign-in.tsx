@@ -72,8 +72,21 @@ export default function SignInScreen() {
         )}
       </Pressable>
 
-      <Pressable onPress={() => router.replace('/(auth)/sign-up')} style={styles.link}>
-        <Text style={{ color: c.brand, fontWeight: '600' }}>Create an account instead</Text>
+      {/* Under the button, where somebody looks after the password failed. */}
+      <Pressable
+        onPress={() => router.push('/(auth)/forgot-password')}
+        accessibilityRole="button"
+        style={styles.link}
+      >
+        <Text style={{ color: c.brandInk, fontWeight: '600' }}>I forgot my password</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => router.replace('/(auth)/sign-up')}
+        accessibilityRole="button"
+        style={styles.link}
+      >
+        <Text style={{ color: c.brandInk, fontWeight: '600' }}>Create an account instead</Text>
       </Pressable>
     </KeyboardAvoidingView>
   )

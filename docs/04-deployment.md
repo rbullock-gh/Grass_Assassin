@@ -97,6 +97,31 @@ Dead tokens are pruned automatically. A phone that has been reinstalled answers
 Expo outages — never delete anything, because silently unsubscribing a real user
 is not recoverable from their side.
 
+### Email
+
+`EMAIL_ENABLED=true` is what makes password reset emails leave the building,
+and it is the setting with the sharpest consequence of the three: a reset
+email is the ONLY way somebody who has forgotten their password gets back into
+their account. There is no support channel, no SMS fallback and no recovery
+code. Off, the API accepts the request, answers 202, writes the token and
+prints the message to its own console. Nobody receives anything.
+
+`EMAIL_ENABLED=true` without both `RESEND_API_KEY` and `MAIL_FROM` **refuses to
+boot**. That is deliberate and different from how push behaves. Push failing
+silently costs a notification; email failing silently costs an account, and the
+person it costs has no way to tell you, because the only thing they can see is
+a screen saying a link is on its way.
+
+`MAIL_FROM` must be on a domain verified with the provider. An unverified
+sender is refused on every send, and the adapter does not retry it — a rejected
+domain does not heal.
+
+`RESET_LINK_BASE` is where the link in that email points, `grassassassin://
+reset-password` by default so it opens the app. A build that is not installed
+on the device reading the mail cannot follow a custom scheme, which is why the
+reset screen also accepts the code pasted by hand.
+
+
 ## The first administrator
 
 The dashboard has no shared password and no bootstrap account. Make one:
@@ -209,6 +234,18 @@ recurring — from nothing but `dist`, a pruned `node_modules` and `prisma`;
 and passes all 54 of its auth checks and 64 render combinations. The Dockerfiles assemble exactly those
 pieces, but assembling them inside a real build has not happened. CI builds both
 images so the first run will say.
+
+**Email has never been delivered.** There is no API key in this environment and
+no live call is made anywhere in the test suite. What IS verified is everything
+on our side of the boundary: the whole reset flow end to end against a provider
+that keeps the message instead of sending it — request, token, link, spend,
+sign in with the new password, old password dead, link refused the second time
+— and, against a stubbed fetch, the exact request the Resend adapter builds,
+that it retries a 429 and a 5xx, that it honours `Retry-After`, that it does
+not retry a 422 or a 401, and that a retry reuses one idempotency key so it
+cannot send twice. What is NOT verified is that Resend accepts any of it. The
+first real send needs a human watching, and the thing to watch for is a 422
+naming the sender domain.
 
 The app has never run on a real handset. Every visual and accessibility check
 in this repository runs against the React Native Web build, which is the same

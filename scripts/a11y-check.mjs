@@ -61,6 +61,16 @@ const MOBILE_SCREENS = [
   { name: 'recurring', path: '/recurring', as: 'customer' },
   { name: 'change-password', path: '/change-password', as: 'worker' },
   { name: 'delete-account', path: '/delete-account', as: 'worker' },
+  /*
+   * The signed-out screens, which had never been audited — the list had
+   * `welcome` and then jumped straight to screens that need a session. That
+   * gap is why a link colour four thousandths under AA shipped on every one of
+   * them: nothing was looking at the screens a locked-out person sees.
+   */
+  { name: 'sign-in', path: '/sign-in', as: null },
+  { name: 'sign-up', path: '/sign-up', as: null },
+  { name: 'forgot-password', path: '/forgot-password', as: null },
+  { name: 'reset-password', path: '/reset-password?token=example-token', as: null },
 ]
 
 const ADMIN_PAGES = [
@@ -234,7 +244,16 @@ const AUDIT = (opts = {}) => {
     if (ratio < required) {
       findings.contrast.push({
         el: describe(el),
-        ratio: Number(ratio.toFixed(2)),
+        /*
+         * Three decimals, not two.
+         *
+         * A real failure at 4.496:1 rounds to "4.5" and then prints as
+         * "4.5:1 (needs 4.5:1)" — a finding that reads like a pass and invites
+         * being waved through as a checker bug. It was not a checker bug; the
+         * link colour on every auth screen was genuinely under the line. The
+         * tool has to be able to state a near-miss as a near-miss.
+         */
+        ratio: Number(ratio.toFixed(3)),
         required,
         size: Number(size.toFixed(1)),
         color: style.color,

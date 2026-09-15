@@ -211,7 +211,7 @@ export default function RecurringScreen() {
                   accessibilityRole="button"
                   style={[styles.action, { borderColor: c.border }]}
                 >
-                  <Text style={{ color: c.brand, fontWeight: '700', fontSize: 13.5 }}>
+                  <Text style={{ color: c.brandInk, fontWeight: '700', fontSize: 13.5 }}>
                     Start it again
                   </Text>
                 </Pressable>
@@ -224,7 +224,7 @@ export default function RecurringScreen() {
                       accessibilityLabel="Resume this service"
                       style={[styles.action, { borderColor: c.border }]}
                     >
-                      <Text style={{ color: c.brand, fontWeight: '700', fontSize: 13.5 }}>Resume</Text>
+                      <Text style={{ color: c.brandInk, fontWeight: '700', fontSize: 13.5 }}>Resume</Text>
                     </Pressable>
                   ) : (
                     <Pressable

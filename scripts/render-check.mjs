@@ -81,6 +81,12 @@ async function main() {
     { name: 'welcome', path: '/welcome', as: null },
     { name: 'sign-in', path: '/sign-in', as: null },
     { name: 'sign-up', path: '/sign-up', as: null },
+    // Signed out by definition: somebody who cannot get in.
+    { name: 'forgot-password', path: '/forgot-password', as: null },
+    { name: 'reset-password', path: '/reset-password', as: null },
+    // And the same screen arriving the way it usually does, from the emailed
+    // link, with the token already in the URL.
+    { name: 'reset-password-linked', path: '/reset-password?token=example-token', as: null },
     // The map is the one screen that waits on something slow: the location
     // fallback fires at 6s, so anything less screenshots an empty map and
     // reports a false "no jobs".

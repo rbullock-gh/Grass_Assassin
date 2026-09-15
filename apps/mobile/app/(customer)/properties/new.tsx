@@ -131,7 +131,7 @@ export default function NewPropertyScreen() {
           accessibilityRole="button"
           style={[styles.locate, { borderColor: c.brand, backgroundColor: c.brandSubtle }]}
         >
-          <Text style={{ color: c.brand, fontWeight: '700' }}>Use my current location</Text>
+          <Text style={{ color: c.brandInk, fontWeight: '700' }}>Use my current location</Text>
         </Pressable>
 
         <View style={{ gap: space[3] }}>

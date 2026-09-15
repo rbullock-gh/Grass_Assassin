@@ -224,6 +224,14 @@ describe('every route requires the authentication it should', () => {
     'POST /v1/auth/login',
     'POST /v1/auth/refresh',
     'POST /v1/auth/logout',
+    /*
+     * Password recovery cannot require the credential it recovers.
+     *
+     * Both are rate limited, both answer identically whether or not the
+     * address or token is real, and neither returns anything about an account.
+     */
+    'POST /v1/auth/forgot-password',
+    'POST /v1/auth/reset-password',
     // Signed with Stripe's own secret and verified in the handler; a bearer
     // token is not a thing Stripe has.
     'POST /v1/webhooks/stripe',

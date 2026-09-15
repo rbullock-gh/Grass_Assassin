@@ -173,7 +173,7 @@ export default function JobDetailScreen() {
               </Text>
             ) : null}
             <Pressable onPress={openDirections} style={[styles.secondary, { borderColor: c.brand }]}>
-              <Text style={{ color: c.brand, fontWeight: '700' }}>Get directions</Text>
+              <Text style={{ color: c.brandInk, fontWeight: '700' }}>Get directions</Text>
             </Pressable>
             {/* Sits directly under the address, which is where the questions
                 come from: a locked gate, a dog in the yard, a bin in the way.

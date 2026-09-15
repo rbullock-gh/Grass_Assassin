@@ -34,6 +34,8 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)/welcome" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)/sign-in" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)/sign-up" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)/forgot-password" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)/reset-password" options={{ headerShown: false }} />
 
             <Stack.Screen name="(worker)/map" options={{ headerShown: false }} />
             <Stack.Screen name="(worker)/job/[id]" options={{ title: 'Job details' }} />

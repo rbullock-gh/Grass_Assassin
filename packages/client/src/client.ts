@@ -523,6 +523,33 @@ export class GrassAssassinClient {
     })
   }
 
+  /**
+   * "I forgot my password."
+   *
+   * Resolves the same way whether or not the address has an account, because
+   * the server answers the same way — deliberately. Do not build a UI that
+   * implies otherwise: there is nothing here to branch on, and inventing a
+   * distinction in the client would recreate the account-enumeration hole the
+   * server is careful not to have.
+   */
+  forgotPassword(email: string) {
+    return this.request<{ message: string }>('POST', '/v1/auth/forgot-password', {
+      body: { email },
+    })
+  }
+
+  /**
+   * Spends a reset link and sets a new password.
+   *
+   * Succeeds once per link. Every failure is the same error, so there is
+   * nothing to tell the person beyond "ask for a new link".
+   */
+  resetPassword(token: string, newPassword: string) {
+    return this.request<void>('POST', '/v1/auth/reset-password', {
+      body: { token, newPassword },
+    })
+  }
+
   /** Signs out everywhere, including here. For a phone left somewhere. */
   logoutEverywhere() {
     return this.request<void>('POST', '/v1/auth/logout-all')

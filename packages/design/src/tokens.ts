@@ -123,6 +123,21 @@ export const semanticLight = {
   dangerInk:        '#A31515',
   infoInk:          '#1D4ED8',
 
+  /**
+   * Brand green as TEXT, which is not the same colour as brand green as a fill.
+   *
+   * green600 on the light background measures 4.496:1 — under the 4.5:1 that
+   * body text needs, by four thousandths. It is fine as a button fill with
+   * white on top, and it had been shipping as link text on every screen with a
+   * "Create an account instead" or "I forgot my password" under the button.
+   *
+   * A miss this small is worth naming precisely, because it is the kind that
+   * gets waved through: the audit that found it PRINTED the ratio as "4.5:1",
+   * rounded, so its own output read like a pass. The reporting was fixed at the
+   * same time as the colour.
+   */
+  brandInk:         palette.green700,
+
   payout:           palette.green600,
   // gold500 as rank NUMBERS on white measured 2.3:1 — the least readable thing
   // in the app sat on the leaderboard, which exists to be read.
@@ -169,6 +184,11 @@ export const semanticDark = {
   warningInk:       palette.gold400,
   dangerInk:        '#F87171',
   infoInk:          '#60A5FA',
+
+  // On the dark ground the brand green already measures 8.1:1 as text, so this
+  // is the same colour rather than a darker one — the light-mode problem does
+  // not exist here and inventing a difference would only add a thing to drift.
+  brandInk:         palette.green400,
 
   payout:           palette.green400,
   rank:             palette.gold400,

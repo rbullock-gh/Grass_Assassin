@@ -106,7 +106,7 @@ export default function SignUpScreen() {
         </Pressable>
 
         <Pressable onPress={() => router.replace('/(auth)/sign-in')} style={styles.link}>
-          <Text style={{ color: c.brand, fontWeight: '600' }}>I already have an account</Text>
+          <Text style={{ color: c.brandInk, fontWeight: '600' }}>I already have an account</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -116,7 +116,13 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space[5], paddingBottom: space[8] },
   segmented: { flexDirection: 'row', padding: 3, borderRadius: radius.md, marginTop: space[4], gap: 3 },
-  segment: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40, borderRadius: radius.sm },
+  // minTouchTarget, not a hand-picked 40: this is the first choice anybody
+  // makes in the product and it was 4px under the minimum. Found only once
+  // the signed-out screens were added to the accessibility audit.
+  segment: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    minHeight: minTouchTarget, borderRadius: radius.sm,
+  },
   error: { marginTop: space[3], fontSize: 14, fontWeight: '600' },
   primary: {
     marginTop: space[5], minHeight: minTouchTarget + 6, borderRadius: radius.md,

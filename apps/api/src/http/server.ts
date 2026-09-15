@@ -26,6 +26,8 @@ import { registerSafetyRoutes } from './routes/safety.js'
 import { registerPreferenceRoutes } from './routes/preferences.js'
 import type { PushSender } from '../modules/notifications/notifier.js'
 import { FakeStorageProvider, type StorageProvider } from '../modules/storage/provider.js'
+import type { MailProvider } from '../modules/mail/provider.js'
+import { ConsoleMailProvider } from '../modules/mail/console-provider.js'
 
 export interface RateLimitSettings {
   enabled: boolean
@@ -39,6 +41,24 @@ declare module 'fastify' {
   interface FastifyInstance {
     rateLimits: RateLimitSettings
     routeManifest: RouteRecord[]
+    /**
+     * Work a route starts and does not wait for.
+     *
+     * There is exactly one caller today — the password-reset request, which
+     * must reply before doing anything so that its response time does not
+     * reveal whether the address has an account. Firing a promise and walking
+     * away is the right behaviour there and a liability everywhere else:
+     * nothing knows the work is outstanding, so a shutdown kills it silently.
+     * For a reset that means the token is already written and invalidated the
+     * previous one, and the email never goes — the person is left with no
+     * working link and no idea why.
+     *
+     * Registering it here means shutdown can drain it, and a test can wait for
+     * it instead of racing the next test's truncate.
+     */
+    background(work: Promise<unknown>): void
+    /** Resolves when everything handed to `background` has settled. */
+    settleBackground(): Promise<void>
   }
 }
 
@@ -49,6 +69,15 @@ export interface ServerDeps {
   storage?: StorageProvider
   /** Push delivery. Defaults to the recording sender in local development. */
   push?: PushSender
+  /**
+   * Email delivery. Defaults to the console provider, which sends nothing.
+   *
+   * Defaulting to a provider that does NOT send is deliberate: a staging copy
+   * of production data that mails real people is a worse failure than one that
+   * mails nobody, and a missing API key should mean silence rather than a
+   * process that will not boot.
+   */
+  mail?: MailProvider
   config: {
     accessSecret: string
     accessTtlSeconds: number
@@ -57,6 +86,13 @@ export interface ServerDeps {
     isProduction: boolean
     /** Provider webhook signing secret. Webhooks are refused without it. */
     webhookSecret?: string
+    /**
+     * Where a password-reset link should point.
+     *
+     * The app's custom scheme in production (`grassassassin://reset-password`);
+     * overridable so a development build can point a link at a browser.
+     */
+    resetLinkBase?: string
     /**
      * Where this server is reachable, e.g. http://192.168.1.4:4000.
      *
@@ -94,8 +130,10 @@ export interface RouteRecord {
 }
 
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
-  const resolved: ServerDeps & { storage: StorageProvider } = {
+  const resolved: ServerDeps & { storage: StorageProvider; mail: MailProvider } = {
     ...deps,
+    // Sends nothing unless a real provider is passed in. See ServerDeps.mail.
+    mail: deps.mail ?? new ConsoleMailProvider(!deps.config.isProduction),
     // publicBaseUrl makes the fake provider issue upload URLs that point back
     // at this server, so the presign → PUT → confirm chain actually works in
     // development. Without it the URL names a host that does not exist and the
@@ -227,6 +265,23 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     if (user.suspendedUntil !== null && user.suspendedUntil > new Date()) return
 
     request.identity = { userId: user.id, roles: user.roles }
+  })
+
+  /*
+   * Fire-and-forget work, tracked.
+   *
+   * Errors are swallowed here as well as at the call site: this set exists to
+   * make the work awaitable, and an awaited rejection would turn a drained
+   * shutdown into a crashed one.
+   */
+  const outstanding = new Set<Promise<unknown>>()
+  app.decorate('background', (work: Promise<unknown>) => {
+    const tracked = work.catch(() => undefined).finally(() => outstanding.delete(tracked))
+    outstanding.add(tracked)
+  })
+  app.decorate('settleBackground', async () => {
+    // A loop rather than one Promise.all: draining can start more work.
+    while (outstanding.size > 0) await Promise.all([...outstanding])
   })
 
   // --- error handling -----------------------------------------------------

@@ -40,6 +40,30 @@ const envSchema = z.object({
    */
   PUSH_ENABLED: z.enum(['true', 'false']).default('false'),
   EXPO_ACCESS_TOKEN: z.string().optional(),
+
+  /**
+   * Transactional email.
+   *
+   * EMAIL_ENABLED is separate from the API key for the same reason PUSH_ENABLED
+   * is: having a credential is not the same question as whether this process
+   * should be mailing real people. A staging environment restored from a
+   * production dump has every real address in it.
+   *
+   * MAIL_FROM must be on a domain verified with the provider or every send is
+   * refused — which is worth knowing at boot rather than the first time
+   * somebody forgets their password.
+   */
+  EMAIL_ENABLED: z.enum(['true', 'false']).default('false'),
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().email().optional(),
+
+  /**
+   * Where a password-reset link points.
+   *
+   * The app's custom scheme, so the link opens the app rather than a browser.
+   * Overridable for a development build, or for a web reset page later.
+   */
+  RESET_LINK_BASE: z.string().default('grassassassin://reset-password'),
 })
 
 export type Env = z.infer<typeof envSchema>

@@ -10,6 +10,23 @@
 /** Must equal the minimum in passwordSchema. Tied by test, not by hope. */
 export const MIN_PASSWORD_LENGTH = 10
 
+/**
+ * The length rule on its own, for a form that has no current password to
+ * compare against — resetting from an emailed link is exactly that case.
+ *
+ * Shares the constant rather than restating the number, so the reset form and
+ * the change form cannot disagree about what is long enough.
+ *
+ * Returns null while there is nothing useful to say: an empty field is not yet
+ * a mistake, and scolding somebody for not having typed anything is noise.
+ */
+export function describePasswordProblem(password: string): string | null {
+  if (password.length === 0) return null
+  if (password.length >= MIN_PASSWORD_LENGTH) return null
+  const short = MIN_PASSWORD_LENGTH - password.length
+  return `${short} more character${short === 1 ? '' : 's'}.`
+}
+
 export interface PasswordCheck {
   ok: boolean
   /** Shown under the field. Null when there is nothing to say yet. */

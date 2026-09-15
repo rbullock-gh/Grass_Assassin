@@ -8,6 +8,8 @@ import { BullMqQueue } from './modules/queue/bullmq-queue.js'
 import { registerHandlers, registerSchedules } from './modules/queue/handlers.js'
 import { Notifier, RecordingPushSender } from './modules/notifications/notifier.js'
 import { ExpoPushSender } from './modules/notifications/expo-push.js'
+import { ResendMailProvider } from './modules/mail/resend-provider.js'
+import { ConsoleMailProvider } from './modules/mail/console-provider.js'
 import type { Queue } from './modules/queue/queue.js'
 
 /**
@@ -67,6 +69,37 @@ async function main() {
     )
   }
 
+  /*
+   * Email delivery.
+   *
+   * Same shape as push and for the same reason, with one addition: a
+   * half-configured mail setup fails at BOOT rather than at the first reset.
+   * EMAIL_ENABLED=true with no key or no from-address is somebody who believes
+   * their password resets work. Finding out otherwise means finding out from a
+   * locked-out user, which is the worst available moment.
+   */
+  const emailEnabled = env.EMAIL_ENABLED === 'true'
+  if (emailEnabled && (!env.RESEND_API_KEY || !env.MAIL_FROM)) {
+    throw new Error(
+      'EMAIL_ENABLED=true but RESEND_API_KEY and MAIL_FROM are not both set.\n'
+      + 'Password resets would be accepted and silently never delivered. Set both, '
+      + 'or set EMAIL_ENABLED=false and accept that nobody can recover an account.',
+    )
+  }
+
+  const mail = emailEnabled && env.RESEND_API_KEY && env.MAIL_FROM
+    ? new ResendMailProvider({ apiKey: env.RESEND_API_KEY, from: env.MAIL_FROM })
+    : new ConsoleMailProvider(env.NODE_ENV !== 'production')
+
+  if (!emailEnabled) {
+    console.warn(
+      env.NODE_ENV === 'production'
+        ? '⚠️  EMAIL_ENABLED is not true — password reset emails will NOT be delivered, '
+          + 'which means a locked-out user cannot recover their account.'
+        : '⚠️  No email delivery — reset links are printed to this console instead.',
+    )
+  }
+
   const notifier = new Notifier(prisma, push)
   registerHandlers({
     db: prisma, provider, queue, notifier,
@@ -78,6 +111,7 @@ async function main() {
     db: prisma,
     provider,
     push,
+    mail,
     config: {
       accessSecret: env.JWT_ACCESS_SECRET,
       accessTtlSeconds: env.ACCESS_TOKEN_TTL_SECONDS,
@@ -89,6 +123,7 @@ async function main() {
       // (http://192.168.1.4:4000) and a phone on the same network can complete
       // a real photo upload against the local fake storage.
       publicBaseUrl: env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT}`,
+      resetLinkBase: env.RESET_LINK_BASE,
     },
   })
 
@@ -100,6 +135,10 @@ async function main() {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
       void app.close()
+        // Reset emails are sent behind the response, so closing the server is
+        // not the same as having finished. Draining first means a deploy does
+        // not leave somebody holding a token whose email was never sent.
+        .then(() => app.settleBackground())
         .then(() => queue.close())
         .then(() => prisma.$disconnect())
         .then(() => process.exit(0))

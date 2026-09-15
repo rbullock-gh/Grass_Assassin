@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkNewPassword, MIN_PASSWORD_LENGTH } from '../src/lib/password'
+import { checkNewPassword, describePasswordProblem, MIN_PASSWORD_LENGTH } from '../src/lib/password'
 import { passwordSchema } from '@grassassassin/shared'
 
 describe('the rule this form states is the rule the server enforces', () => {
@@ -62,5 +62,28 @@ describe('changing a password', () => {
     ]) {
       expect(check(bad).ok, JSON.stringify(bad)).toBe(false)
     }
+  })
+})
+
+describe('describePasswordProblem', () => {
+  it('says nothing about an empty field', () => {
+    expect(describePasswordProblem('')).toBeNull()
+  })
+
+  it('counts down the characters still needed', () => {
+    expect(describePasswordProblem('abc')).toBe('7 more characters.')
+    expect(describePasswordProblem('abcdefghi')).toBe('1 more character.')
+  })
+
+  it('is satisfied at exactly the minimum', () => {
+    expect(describePasswordProblem('a'.repeat(MIN_PASSWORD_LENGTH))).toBeNull()
+  })
+
+  it('uses the same minimum the change-password form does', () => {
+    // Two forms disagreeing about what is long enough is how one of them
+    // starts saying "looks good" and then getting a 400.
+    const justShort = 'a'.repeat(MIN_PASSWORD_LENGTH - 1)
+    expect(describePasswordProblem(justShort)).not.toBeNull()
+    expect(checkNewPassword({ current: 'x', next: justShort, confirm: justShort }).ok).toBe(false)
   })
 })

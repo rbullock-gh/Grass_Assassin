@@ -69,6 +69,7 @@ model User {
   customerProfile CustomerProfile?
   workerProfile   WorkerProfile?
   refreshTokens   RefreshToken[]
+  passwordResets  PasswordResetToken[]
   properties      Property[]
   postedJobs      Job[]            @relation("JobCustomer")
   claims          JobClaim[]
@@ -113,6 +114,32 @@ model RefreshToken {
   @@index([familyId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+/// A single-use, time-boxed ticket to set a new password without knowing the old one.
+model PasswordResetToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of the token. The token itself exists in exactly one place — the
+  /// email that was sent — so a database leak does not hand over live resets.
+  tokenHash  String   @unique
+
+  expiresAt  DateTime
+  /// Set the moment it is spent. A reset link that works twice is a reset link
+  /// that works for whoever else has read the mailbox since.
+  usedAt     DateTime?
+
+  /// Who asked, not who they are: for spotting someone walking a list of
+  /// addresses, without keeping an address log of its own.
+  requestIpHash String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Device {

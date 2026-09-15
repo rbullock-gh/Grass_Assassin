@@ -7,6 +7,8 @@ import { rotateSession, revokeSession, revokeAllSessions } from '../../modules/a
 import { hashIp } from '../../modules/auth/password.js'
 import { requireIdentity } from '../context.js'
 import { deleteAccount, deletionBlockers } from '../../modules/auth/deletion.js'
+import { requestPasswordReset, resetPassword } from '../../modules/auth/password-reset.js'
+import { ConsoleMailProvider } from '../../modules/mail/console-provider.js'
 
 export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps): Promise<void> {
   const authConfig = {
@@ -14,6 +16,10 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps)
     accessTtlSeconds: deps.config.accessTtlSeconds,
     refreshTtlDays: deps.config.refreshTtlDays,
   }
+
+  // buildServer resolves this; the fallback keeps the route file usable on its
+  // own and never sends, which is the right default for a thing that mails people.
+  const mail = deps.mail ?? new ConsoleMailProvider(false)
 
   const requestMeta = (request: { headers: Record<string, unknown>; ip: string }) => ({
     userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : undefined,
@@ -103,6 +109,72 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps)
     const identity = requireIdentity(request)
     const body = z.object({ password: z.string().min(1) }).parse(request.body)
     return deleteAccount(deps.db, { userId: identity.userId, password: body.password })
+  })
+
+  /**
+   * "I forgot my password."
+   *
+   * Public, because the whole point is that the person cannot authenticate.
+   *
+   * ALWAYS 202, always the same body, whether or not the address has an
+   * account — and it replies BEFORE doing any of the work. That ordering is
+   * the substance of the guarantee, not decoration: looking an address up,
+   * writing a token and handing a message to a mail provider take measurably
+   * longer than finding nothing, so any version that awaits the work leaks the
+   * answer in the response time no matter how carefully the body is worded.
+   *
+   * A marketplace that knows where people live must not let anyone type
+   * addresses into a public endpoint and learn which ones are customers.
+   *
+   * The rate limit is tight and keyed the same way the rest are. It is the
+   * only thing standing between this and somebody walking a list of addresses
+   * to generate mail, and — because the response says nothing — the abuse
+   * worth stopping here is the mail volume, not the enumeration.
+   */
+  app.post('/auth/forgot-password', {
+    config: app.rateLimits.enabled
+      ? { rateLimit: { max: 5, timeWindow: '15 minutes' } }
+      : {},
+  }, async (request, reply) => {
+    const body = z.object({ email: z.string().email() }).parse(request.body)
+
+    /*
+     * Deliberately NOT awaited — but registered, so a shutdown drains it rather
+     * than killing a reset between writing the token and sending the link.
+     */
+    app.background(requestPasswordReset(deps.db, mail, {
+      email: body.email,
+      ipHash: hashIp(request.ip, deps.config.ipSalt),
+      ...(deps.config.resetLinkBase ? { linkBase: deps.config.resetLinkBase } : {}),
+    }))
+
+    return reply.status(202).send({
+      message: 'If that address has an account, a reset link is on its way.',
+    })
+  })
+
+  /**
+   * Spending a reset link.
+   *
+   * Public for the same reason. Every failure — unknown, expired, already
+   * used, suspended account — gives one identical message, so a stolen or
+   * guessed token cannot be used to learn which guesses were once real.
+   *
+   * Succeeding signs the person out everywhere, including whoever else was in
+   * the account, which is usually why somebody is doing this.
+   */
+  app.post('/auth/reset-password', {
+    config: app.rateLimits.enabled
+      ? { rateLimit: { max: 10, timeWindow: '15 minutes' } }
+      : {},
+  }, async (request, reply) => {
+    const body = z.object({
+      token: z.string().min(1),
+      newPassword: z.string().min(10).max(200),
+    }).parse(request.body)
+
+    await resetPassword(deps.db, body)
+    return reply.status(204).send()
   })
 
   app.post('/auth/add-role', async (request) => {
