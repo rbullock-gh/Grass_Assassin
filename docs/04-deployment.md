@@ -254,6 +254,16 @@ verified is that Metro produces a clean iOS and a clean Android bundle — CI
 builds both, so the class of break that only appears on a phone fails there
 rather than in somebody's hand.
 
+The app's artwork is generated, not drawn by a designer. `node
+scripts/make-icons.mjs` renders `apps/mobile/assets` from shapes in that file,
+so changing the mark means editing a path rather than finding whoever has the
+source. What IS verified is that each file is a real PNG at the size its
+platform demands, that the iOS icon carries no alpha channel (an upload
+rejection), that the Android adaptive foreground keeps every mark inside the
+66% circle a launcher may crop to, and that the notification icon is a pure
+white silhouette rather than artwork Android would render as a blob. What is
+NOT verified is how any of it looks on a real home screen.
+
 The EAS profiles in `apps/mobile/eas.json` have never been run: a build needs
 an Expo account, and an iOS build needs an Apple Developer account. They are
 written to the documented schema and are a starting point, not a pipeline

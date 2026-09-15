@@ -5,9 +5,11 @@
     "version": "0.1.0",
     "orientation": "default",
     "scheme": "grassassassin",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#0C682F"
     },
@@ -23,6 +25,7 @@
     "android": {
       "package": "com.grassassassin.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0C682F"
       },
       "permissions": [
@@ -33,7 +36,8 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -47,6 +51,7 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/notification-icon.png",
           "color": "#0F833B",
           "defaultChannel": "default"
         }
