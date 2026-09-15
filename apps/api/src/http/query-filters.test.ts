@@ -4,7 +4,10 @@ import { Prisma } from '@prisma/client'
 import { prisma, resetDatabase, createCategory, NASHVILLE } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
-import { RANKS } from '@grassassassin/shared'
+import { RANKS, endOfLocalDay } from '@grassassassin/shared'
+
+/** US Central, where the marketplace launches. */
+const CENTRAL_OFFSET_MINUTES = 360
 
 /**
  * Query-string filters.
@@ -88,18 +91,42 @@ beforeEach(async () => {
   })
   const propertyId = property.json().id
 
-  const post = (cat: string, title: string, equipmentProvided: boolean, hoursOut: number) =>
-    app.inject({
+  const post = async (cat: string, title: string, equipmentProvided: boolean, dueAt: Date) => {
+    const response = await app.inject({
       method: 'POST', url: '/v1/jobs', headers: { authorization: `Bearer ${token}` },
       payload: {
         propertyId, categoryId: cat, title, priceCents: 6000, equipmentProvided,
-        dueAt: new Date(Date.now() + hoursOut * 3_600_000).toISOString(),
+        dueAt: dueAt.toISOString(),
       },
     })
+    // Asserted, because a fixture that silently fails to create its jobs turns
+    // every test below into "the filter returned nothing", which reads like a
+    // filter bug and is not one.
+    expect(response.statusCode, `creating "${title}": ${response.body}`).toBe(201)
+    return response
+  }
 
-  await post(categoryId, 'Mow with their gear', true, 4)
-  await post(categoryId, 'Mow with my gear', false, 4)
-  await post(otherCategoryId, 'Leaves next week', false, 24 * 5)
+  /**
+   * Anchored to the end of the LOCAL day, not to "four hours from now".
+   *
+   * The offset version passed for twenty hours a day and failed for the other
+   * four: run it late enough in UTC and four hours out lands past local
+   * midnight in Central, so a job the test calls "due today" genuinely is not.
+   * That is a real failure of the test, not of the filter — and it would have
+   * turned up as a mystery CI failure every evening in the timezone we launch
+   * in. The instant chosen below is due today whenever this runs.
+   */
+  const now = new Date()
+  const endOfToday = endOfLocalDay(now, CENTRAL_OFFSET_MINUTES)
+  // Halfway between now and the end of the local day: always still today, and
+  // always still in the future, which an hour-before-midnight anchor is not if
+  // the suite happens to run at 23:30 local.
+  const dueToday = new Date(now.getTime() + (endOfToday.getTime() - now.getTime()) / 2)
+  const dueNextWeek = new Date(Date.now() + 5 * 24 * 3_600_000)
+
+  await post(categoryId, 'Mow with their gear', true, dueToday)
+  await post(categoryId, 'Mow with my gear', false, dueToday)
+  await post(otherCategoryId, 'Leaves next week', false, dueNextWeek)
 })
 
 const workerAuth = () => ({ authorization: `Bearer ${workerToken}` })
@@ -131,10 +158,9 @@ describe('boolean filters over a query string', () => {
   })
 
   it('accepts dueToday=true, in the WORKER\'s timezone', async () => {
-    // tzOffsetMinutes=360 is US Central, where the marketplace launches.
-    // Without it, "today" would mean today on the server, and a job due at
-    // 00:35 UTC would be invisible to a worker for whom it is still this evening.
-    const response = await search('dueToday=true&tzOffsetMinutes=360')
+    // Without the offset, "today" would mean today on the server, and a job due
+    // at 00:35 UTC would be invisible to a worker for whom it is still evening.
+    const response = await search(`dueToday=true&tzOffsetMinutes=${CENTRAL_OFFSET_MINUTES}`)
     expect(response.statusCode, `body: ${response.body}`).toBe(200)
     // The two 4-hour jobs are due today; the 5-day job is not.
     expect(response.json().jobs).toHaveLength(2)

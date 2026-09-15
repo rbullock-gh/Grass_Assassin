@@ -1,5 +1,7 @@
+import { Fragment } from 'react'
 import { db } from '@/lib/db'
 import { money, relativeTime, titleCase } from '@/lib/format'
+import { ResolveForm } from './resolve-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +26,7 @@ export default async function DisputesPage() {
           select: {
             id: true, title: true, priceCents: true, generalArea: true,
             claimedByWorkerId: true, completedAt: true, startedAt: true,
+            customerTotalCents: true, workerPayoutCents: true,
             customer: { select: { firstName: true } },
           },
         },
@@ -37,6 +40,15 @@ export default async function DisputesPage() {
     }),
     db.jobPhoto.groupBy({ by: ['jobId'], _count: true }),
   ])
+
+  // What was actually paid out is recorded in the audit entry, not on the
+  // dispute row — on a split the worker's share is proportional and the job's
+  // stored payout is the pre-dispute figure, so showing that would be wrong.
+  const settlements = await db.auditLog.findMany({
+    where: { action: 'dispute.resolved', entityId: { in: disputes.map((d) => d.id) } },
+    select: { entityId: true, after: true, actor: { select: { firstName: true, lastName: true } } },
+  })
+  const settledBy = new Map(settlements.map((s) => [s.entityId, s]))
 
   const photosByJob = new Map(evidenceCounts.map((e) => [e.jobId, e._count]))
   const open = disputes.filter((d) => d.status === 'OPEN' || d.status === 'UNDER_REVIEW')
@@ -89,8 +101,8 @@ export default async function DisputesPage() {
                 {disputes.map((dispute) => {
                   const photos = photosByJob.get(dispute.job.id) ?? 0
                   const geofenced = dispute.job.startedAt !== null
-                  return (
-                    <tr key={dispute.id}>
+                  const row = (
+                    <tr>
                       <td className="strong">
                         {dispute.job.title}
                         <div className="muted" style={{ fontSize: 11.5 }}>
@@ -122,6 +134,36 @@ export default async function DisputesPage() {
                       </td>
                       <td className="muted">{relativeTime(dispute.createdAt)}</td>
                     </tr>
+                  )
+                  const decidable = dispute.status === 'OPEN' || dispute.status === 'UNDER_REVIEW'
+                  return (
+                    <Fragment key={dispute.id}>
+                      {row}
+                      {decidable ? (
+                        <tr className="resolve-row">
+                          {/* The decision sits directly under the evidence it
+                              is based on. A separate screen would mean deciding
+                              from memory. */}
+                          <td colSpan={6}>
+                            <ResolveForm
+                              disputeId={dispute.id}
+                              customerPaidCents={dispute.job.customerTotalCents}
+                              workerPayoutCents={dispute.job.workerPayoutCents}
+                            />
+                          </td>
+                        </tr>
+                      ) : dispute.resolution ? (
+                        <tr className="resolve-row">
+                          <td colSpan={6}>
+                            <p className="resolved-note" data-dispute={dispute.id}>
+                              <strong>{titleCase(dispute.status)}</strong>
+                              {settlementSummary(settledBy.get(dispute.id))}
+                              {' — '}{dispute.resolution}
+                            </p>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -173,4 +215,36 @@ export default async function DisputesPage() {
       </p>
     </>
   )
+}
+
+interface SettlementRow {
+  after: unknown
+  actor: { firstName: string; lastName: string | null } | null
+}
+
+/**
+ * What the resolution actually did, in money and by whom.
+ *
+ * Read from the audit entry rather than recomputed here, so the page cannot
+ * drift from the record. A dashboard that shows a number it worked out itself
+ * is exactly as trustworthy as the arithmetic nobody checked.
+ */
+function settlementSummary(row: SettlementRow | undefined): string {
+  if (!row) return ''
+  const after = row.after as Record<string, unknown> | null
+  if (!after) return ''
+
+  const refund = Number(after.customerRefundCents)
+  const paid = Number(after.workerPaidCents)
+  if (!Number.isFinite(refund) || !Number.isFinite(paid)) return ''
+
+  const who = row.actor ? ` by ${row.actor.firstName}${row.actor.lastName ? ` ${row.actor.lastName}` : ''}` : ''
+  // Only the movements that happened. "Refunded $0.00" is true but reads like
+  // something went wrong, and on this page that costs a second look every time.
+  const moves = [
+    refund > 0 ? `refunded ${money(refund)}` : null,
+    paid > 0 ? `worker paid ${money(paid)}` : null,
+  ].filter(Boolean)
+  if (moves.length === 0) return ` · no money moved${who}`
+  return ` · ${moves.join(', ')}${who}`
 }
