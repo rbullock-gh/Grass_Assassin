@@ -53,6 +53,14 @@ if (!TEST_DATABASE_PATTERN.test(databaseName)) {
  *   TEST_CLOCK_OFFSET_HOURS=8 pnpm --filter @grassassassin/api test
  *
  * Unset — which is every normal run — this does nothing at all.
+ *
+ * ONE KNOWN FALSE POSITIVE, recorded so nobody chases it twice: this moves the
+ * application's clock and not PostgreSQL's. Anything comparing a fixture built
+ * from `Date.now()` against the database's own `now()` will disagree by exactly
+ * the offset. Today that is
+ * `job-search > excludes jobs whose deadline has already passed`, which filters
+ * on `j."dueAt" > now()` in SQL. That test is correct; under the drill it is the
+ * drill that is lying to it.
  */
 const offsetHours = Number(process.env.TEST_CLOCK_OFFSET_HOURS ?? '0')
 if (Number.isFinite(offsetHours) && offsetHours !== 0) {

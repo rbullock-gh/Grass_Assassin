@@ -9,31 +9,47 @@
 Monorepo, TypeScript config, shared contracts package, database schema with PostGIS,
 migrations running against real Postgres, CI.
 
-### Phase 1 — Core loop 🔄 *(in progress)*
+### Phase 1 — Core loop ✅ *(complete)*
 The spine: auth, properties, jobs, geo search with privacy masking, **atomic claim**,
 job lifecycle state machine, photo upload contracts, and the test suite that proves the
 claim is race-free. *Exit criteria: a job can be posted, found by radius, claimed by exactly
 one of N concurrent workers, and driven through to CLOSED — all covered by passing tests.*
+**Met.** The claim is proven single-winner under real concurrency against PostgreSQL, and
+the whole loop runs end to end over HTTP in CI on every change.
 
-### Phase 2 — Money
+### Phase 2 — Money ✅ *(complete, except against real Stripe)*
 Stripe Connect Express onboarding, SetupIntent on the customer side, capture-on-claim,
 hold, release-on-approval, transfers, payouts, refunds, partial refunds, cancellation policy
 engine, webhook handling with idempotency, and the double-entry ledger.
 *Exit criteria: full money lifecycle passing against Stripe test mode, including failure paths.*
+**Partially met.** Every path passes against the fake provider, including declines, expired
+authorizations, replayed webhooks, partial refunds and dispute settlement, with the ledger
+proven to balance. The Stripe adapter is written and has never been given credentials, so
+Stripe's own semantics remain unverified — that is the gap, and it is the real exit criterion.
 
-### Phase 3 — Gamification & automation
+### Phase 3 — Gamification & automation ✅ *(complete)*
 Points engine, rank calculation with quality floors, leaderboards (materialized views),
 BullMQ workers for job matching, deadline reminders, auto-approval, reputation recalculation,
 and fraud flagging.
 
-### Phase 4 — Clients
+### Phase 4 — Clients ✅ *(built; native runtime unproven)*
 Expo app (worker map first — it is the hardest and most important screen), customer post flow,
 design system implementation, responsive layouts across all four size classes, Next.js admin.
+Every screen renders in Chromium at four widths in both themes on every CI run. The admin is
+authenticated, can settle disputes, and has its locks driven by a browser. What is NOT proven
+is a real phone: gestures, native maps, the camera and SecureStore behave differently under
+React Native than under React Native Web, and none of them have run on a device.
 
-### Phase 5 — Hardening & launch
+### Phase 5 — Hardening & launch 🔄 *(started)*
 Load testing (HULK), security review (BLACK WIDOW), accessibility audit, store assets,
 EAS build pipeline, staging + production environments, monitoring, runbooks, legal review
 (worker classification, insurance, ToS, privacy policy).
+
+Done so far: a security review of the branch, admin authentication with per-request
+revocation and sign-in throttling, container images and a compose stack for the whole
+system (`docs/04-deployment.md`), and CI that renders every screen and drives the admin's
+locks. Not started: load testing, accessibility audit, EAS pipeline, monitoring, runbooks,
+and everything legal — which is the item most likely to actually gate a launch.
 
 ---
 
