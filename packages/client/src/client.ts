@@ -550,6 +550,30 @@ export class GrassAssassinClient {
     })
   }
 
+  /**
+   * Enters the six-digit code from the signup email.
+   *
+   * Posting a job and claiming one both require this. Everything else in the
+   * app works without it, deliberately — locking somebody out of an app they
+   * just installed, over a mail sitting in a spam folder, loses the person
+   * rather than the bad actor.
+   */
+  verifyEmail(code: string) {
+    return this.request<{ verifiedAt: string }>('POST', '/v1/auth/verify-email', {
+      body: { code },
+    })
+  }
+
+  /**
+   * "Send it again."
+   *
+   * Answers the same way whether or not anything was sent, including for an
+   * address that is already verified, so there is nothing here to branch on.
+   */
+  resendVerification() {
+    return this.request<{ message: string }>('POST', '/v1/auth/resend-verification')
+  }
+
   /** Signs out everywhere, including here. For a phone left somewhere. */
   logoutEverywhere() {
     return this.request<void>('POST', '/v1/auth/logout-all')

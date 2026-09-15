@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { prisma, resetDatabase, createCategory, createWorker, NASHVILLE } from '../../test/factories.js'
+import { prisma, resetDatabase, createCategory, createWorker, NASHVILLE, markEmailVerified } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
 import { RANKS, destinationPoint, milesToMeters } from '@grassassassin/shared'
@@ -62,7 +62,13 @@ async function registerUser(email: string, intent: 'CUSTOMER' | 'WORKER' = 'CUST
     payload: { email, password: 'a-sufficiently-long-password', firstName: 'Test', intent },
   })
   expect(response.statusCode).toBe(201)
-  return response.json() as { user: { id: string }; tokens: { accessToken: string; refreshToken: string } }
+  const body = response.json() as {
+    user: { id: string }; tokens: { accessToken: string; refreshToken: string }
+  }
+  // Posting and claiming both need a verified address. These tests are about
+  // what happens after that, so they get past it rather than through it.
+  await markEmailVerified(body.user.id)
+  return body
 }
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` })

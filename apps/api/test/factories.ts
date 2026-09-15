@@ -208,3 +208,25 @@ export async function createJob(opts: CreateJobOptions) {
 
   return prisma.job.findUniqueOrThrow({ where: { id } })
 }
+
+/**
+ * Marks an account's email verified, without going through the code.
+ *
+ * Posting a job and claiming one both require a verified address, because this
+ * marketplace sends strangers to people's homes and a ban that a throwaway
+ * address undoes is not a ban. Tests that register over HTTP and then do
+ * something else entirely — messaging, photos, query filters — should say so
+ * here rather than either mocking the gate away or typing a six-digit code in
+ * sixty places.
+ *
+ * Kept as an explicit call, not folded into the register helpers, so that a
+ * test which needs an UNVERIFIED account still gets one by simply not calling
+ * this. The verification flow itself is tested against the real code path in
+ * email-verification.test.ts.
+ */
+export async function markEmailVerified(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { emailVerifiedAt: new Date() },
+  })
+}

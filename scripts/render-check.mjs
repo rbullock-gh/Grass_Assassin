@@ -115,6 +115,15 @@ async function main() {
     { name: 'recurring', path: '/recurring', as: customer },
     { name: 'change-password', path: '/change-password', as: worker },
     { name: 'delete-account', path: '/delete-account', as: worker },
+    // Where somebody lands when posting or claiming is refused, so the screen
+    // is rendered WITH the explanation it carries rather than bare.
+    {
+      name: 'verify-email',
+      path: '/verify-email?reason=' + encodeURIComponent(
+        'Before a pro comes to your home, we check that we can reach you at your email address.',
+      ),
+      as: customer,
+    },
   ].filter(Boolean)
 
   const browser = await launchChromium()

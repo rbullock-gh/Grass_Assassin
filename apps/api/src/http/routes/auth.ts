@@ -8,6 +8,9 @@ import { hashIp } from '../../modules/auth/password.js'
 import { requireIdentity } from '../context.js'
 import { deleteAccount, deletionBlockers } from '../../modules/auth/deletion.js'
 import { requestPasswordReset, resetPassword } from '../../modules/auth/password-reset.js'
+import {
+  sendVerificationEmail, verifyEmail,
+} from '../../modules/auth/email-verification.js'
 import { ConsoleMailProvider } from '../../modules/mail/console-provider.js'
 
 export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps): Promise<void> {
@@ -35,6 +38,21 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps)
   }, async (request, reply) => {
     const body = registerSchema.parse(request.body)
     const result = await register(deps.db, authConfig, { ...body, ...requestMeta(request) })
+
+    /*
+     * The code goes out behind the response.
+     *
+     * Registration must not get slower, or fail, because a mail provider is
+     * having a bad afternoon — the account exists and the person is signed in
+     * either way, and the app has a resend button for exactly this.
+     */
+    app.background(
+      sendVerificationEmail(deps.db, mail, { userId: result.user.id })
+        .catch((caught: unknown) => {
+          console.error('[verify-email] send on register failed:', (caught as Error).message)
+        }),
+    )
+
     return reply.status(201).send(result)
   })
 
@@ -175,6 +193,51 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: ServerDeps)
 
     await resetPassword(deps.db, body)
     return reply.status(204).send()
+  })
+
+  /**
+   * Entering the six-digit code.
+   *
+   * Authenticated: the person registered a moment ago and is holding a session.
+   * Rate limited on top of the per-code attempt ceiling, because the ceiling
+   * only bounds guesses against ONE code and nothing else would bound the
+   * number of codes somebody asks for.
+   */
+  app.post('/auth/verify-email', {
+    config: app.rateLimits.enabled
+      ? { rateLimit: { max: 20, timeWindow: '15 minutes' } }
+      : {},
+  }, async (request) => {
+    const identity = requireIdentity(request)
+    const body = z.object({ code: z.string().min(1).max(12) }).parse(request.body)
+    const result = await verifyEmail(deps.db, { userId: identity.userId, code: body.code })
+    return { verifiedAt: result.verifiedAt.toISOString() }
+  })
+
+  /**
+   * "Send it again."
+   *
+   * Tightly limited: this is the one route in the product that causes an email
+   * to be sent to an address on demand, so without a limit it is a free mail
+   * cannon pointed at whatever address somebody registered.
+   *
+   * Answers 202 whether or not anything was sent — an already-verified account
+   * gets the same reply as one that needed a code, because there is nothing
+   * useful to say and a difference here is a difference worth probing.
+   */
+  app.post('/auth/resend-verification', {
+    config: app.rateLimits.enabled
+      ? { rateLimit: { max: 4, timeWindow: '15 minutes' } }
+      : {},
+  }, async (request, reply) => {
+    const identity = requireIdentity(request)
+    app.background(
+      sendVerificationEmail(deps.db, mail, { userId: identity.userId })
+        .catch((caught: unknown) => {
+          console.error('[verify-email] resend failed:', (caught as Error).message)
+        }),
+    )
+    return reply.status(202).send({ message: 'If your address still needs verifying, a code is on its way.' })
   })
 
   app.post('/auth/add-role', async (request) => {

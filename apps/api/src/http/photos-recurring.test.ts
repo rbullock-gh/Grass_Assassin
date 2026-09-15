@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { prisma, resetDatabase, createCategory, NASHVILLE } from '../../test/factories.js'
+import { prisma, resetDatabase, createCategory, NASHVILLE, markEmailVerified } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
 import { FakeStorageProvider } from '../modules/storage/provider.js'
@@ -68,6 +68,8 @@ beforeEach(async () => {
   })
   customerToken = customer.json().tokens.accessToken
   customerId = customer.json().user.id
+  // Posting needs a verified address; this file is about photos and recurring.
+  await markEmailVerified(customerId)
   await prisma.customerProfile.update({
     where: { userId: customerId },
     data: { stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_test_visa' },
@@ -79,6 +81,7 @@ beforeEach(async () => {
   })
   workerToken = worker.json().tokens.accessToken
   workerId = worker.json().user.id
+  await markEmailVerified(workerId)
   await prisma.workerProfile.update({
     where: { userId: workerId },
     data: {

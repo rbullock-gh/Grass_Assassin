@@ -10,6 +10,7 @@ import { progressToNextRank, RANKS } from '@grassassassin/shared'
 import type { Category, MapJob } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { showAlert } from '@/lib/dialog'
+import { isVerificationRequired, verificationRoute } from '@/lib/verification-gate'
 import { useAuth } from '@/lib/auth'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
@@ -151,8 +152,22 @@ export default function WorkerMapScreen() {
         showAlert('Just missed it', result.message)
         await refetch()
       }
-    } catch {
-      showAlert('Could not claim', 'Check your connection and try again.')
+    } catch (error) {
+      if (isVerificationRequired(error)) {
+        const route = verificationRoute({ action: 'claim', next: '/(worker)/map' })
+        router.push({ pathname: route.pathname, params: route.params } as never)
+        return
+      }
+      /*
+       * Was a bare `catch {}` reporting every failure as a connection problem.
+       * That is true for most of them and actively misleading for the rest —
+       * a worker told to check their connection, while holding four bars, has
+       * been given the one explanation they can rule out themselves.
+       */
+      showAlert(
+        'Could not claim',
+        error instanceof Error ? error.message : 'Check your connection and try again.',
+      )
     } finally {
       setClaimingId(null)
     }

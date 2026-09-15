@@ -116,6 +116,13 @@ a screen saying a link is on its way.
 sender is refused on every send, and the adapter does not retry it — a rejected
 domain does not heal.
 
+Email is also what verifies an address at signup, and that has a sharper edge
+than the reset flow: posting a job and claiming one BOTH require a verified
+address. With `EMAIL_ENABLED=false` in a real environment, nobody who signs up
+can ever post or claim — the app works, the codes are printed to a console
+nobody reads, and the marketplace is inert. This is the single setting most
+likely to produce a deployment that looks healthy and does nothing.
+
 `RESET_LINK_BASE` is where the link in that email points, `grassassassin://
 reset-password` by default so it opens the app. A build that is not installed
 on the device reading the mail cannot follow a custom scheme, which is why the

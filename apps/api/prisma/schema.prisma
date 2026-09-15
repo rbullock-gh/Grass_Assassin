@@ -70,6 +70,7 @@ model User {
   workerProfile   WorkerProfile?
   refreshTokens   RefreshToken[]
   passwordResets  PasswordResetToken[]
+  emailVerifications EmailVerification[]
   properties      Property[]
   postedJobs      Job[]            @relation("JobCustomer")
   claims          JobClaim[]
@@ -140,6 +141,36 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("password_reset_tokens")
+}
+
+/// A short code proving somebody can read the address they signed up with.
+model EmailVerification {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The address the code was sent TO, which is not always the address on the
+  /// user row: somebody can change their email while a code is outstanding,
+  /// and a code proving they read the OLD inbox must not verify the new one.
+  email      String
+
+  /// SHA-256 of the code. Six digits is little entropy, so the protection is
+  /// the attempt counter and the rate limit, not the hash — but a database
+  /// leak still should not hand over live codes.
+  codeHash   String
+
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  /// Wrong guesses against THIS code. Six digits is a million possibilities;
+  /// without a ceiling, a patient script walks it.
+  attempts   Int      @default(0)
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_verifications")
 }
 
 model Device {

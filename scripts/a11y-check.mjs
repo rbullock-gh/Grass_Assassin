@@ -61,6 +61,13 @@ const MOBILE_SCREENS = [
   { name: 'recurring', path: '/recurring', as: 'customer' },
   { name: 'change-password', path: '/change-password', as: 'worker' },
   { name: 'delete-account', path: '/delete-account', as: 'worker' },
+  {
+    name: 'verify-email',
+    path: '/verify-email?reason=' + encodeURIComponent(
+      'Before a pro comes to your home, we check that we can reach you at your email address.',
+    ),
+    as: 'customer',
+  },
   /*
    * The signed-out screens, which had never been audited — the list had
    * `welcome` and then jumped straight to screens that need a session. That

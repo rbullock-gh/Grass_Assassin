@@ -191,7 +191,17 @@ async function seedDemoData() {
         email, passwordHash, firstName: name, lastName: 'Demo',
         roles: ['CUSTOMER'], emailVerifiedAt: new Date(),
       },
-      update: {},
+      /*
+       * The password is RESET on every run, not left alone.
+       *
+       * `update: {}` meant re-seeding did not restore the credentials this
+       * script prints at the end. Anything that had changed the password since
+       * — a demo of the reset flow, a manual test — left the script cheerfully
+       * announcing a password that no longer worked, and the failure surfaced
+       * later as an unrelated harness dying on "Incorrect email or password".
+       * A seed that advertises credentials has to guarantee them.
+       */
+      update: { passwordHash, emailVerifiedAt: new Date(), deletedAt: null, status: 'ACTIVE' },
     })
     await prisma.customerProfile.upsert({
       where: { userId: user.id },
@@ -239,7 +249,12 @@ async function seedDemoData() {
         email, passwordHash, firstName: spec.name, lastName: 'Demo',
         roles: ['WORKER'], emailVerifiedAt: new Date(), phoneVerifiedAt: new Date(),
       },
-      update: {},
+      // As above: re-seeding restores the advertised password rather than
+      // printing one that may no longer be true.
+      update: {
+        passwordHash, emailVerifiedAt: new Date(), phoneVerifiedAt: new Date(),
+        deletedAt: null, status: 'ACTIVE',
+      },
     })
 
     const rank = [...ranks].reverse().find((r) => spec.points >= r.minPoints) ?? ranks[0]!

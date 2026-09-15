@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { prisma, resetDatabase, createCategory, NASHVILLE } from '../../test/factories.js'
+import { prisma, resetDatabase, createCategory, NASHVILLE, markEmailVerified } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
 import { RANKS } from '@grassassassin/shared'
@@ -59,7 +59,11 @@ async function registerUser(email: string, firstName: string, intent: 'CUSTOMER'
     payload: { email, password: 'a-sufficiently-long-password', firstName, intent },
   })
   expect(response.statusCode).toBe(201)
-  return response.json() as { user: { id: string }; tokens: { accessToken: string } }
+  const body = response.json() as { user: { id: string }; tokens: { accessToken: string } }
+  // Posting and claiming both need a verified address; that is not what this
+  // file is testing.
+  await markEmailVerified(body.user.id)
+  return body
 }
 
 /** Posts a job and gets it claimed, which is what opens a conversation. */

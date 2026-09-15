@@ -42,6 +42,18 @@ afterAll(async () => {
 })
 
 beforeEach(async () => {
+  /*
+   * Drain before truncating.
+   *
+   * The guard below injects a request into EVERY registered route, and two of
+   * them — forgot-password and resend-verification — deliberately reply before
+   * doing their work, so that a response time cannot reveal whether an address
+   * has an account. That work is still running when the next test truncates,
+   * and `TRUNCATE` against a live query deadlocks rather than waiting: the
+   * failure surfaces as `40P01` on an unrelated test, which is a miserable
+   * thing to debug from the name of the test that reports it.
+   */
+  await app.settleBackground()
   await resetDatabase()
   await prisma.rank.createMany({
     data: RANKS.map((r, i) => ({

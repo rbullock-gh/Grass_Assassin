@@ -8,6 +8,7 @@ import { router } from 'expo-router'
 import type { Category, PropertySummary, PriceGuidance } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { showAlert } from '@/lib/dialog'
+import { isVerificationRequired, verificationRoute } from '@/lib/verification-gate'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { useLayout } from '@/lib/use-layout'
 import {
@@ -111,6 +112,12 @@ export default function PostJobScreen() {
       // customer enriches it while pros are already seeing it.
       router.replace(`/(customer)/jobs/${job.id}`)
     } catch (error) {
+      // The one refusal with somewhere to go: a code is already in their inbox.
+      if (isVerificationRequired(error)) {
+        const route = verificationRoute({ action: 'post', next: '/(customer)/post' })
+        router.push({ pathname: route.pathname, params: route.params } as never)
+        return
+      }
       showAlert(
         'Could not post your job',
         error instanceof Error ? error.message : 'Please try again.',

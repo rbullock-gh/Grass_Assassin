@@ -9,6 +9,7 @@ import {
 } from '@grassassassin/shared'
 import type { ServerDeps } from '../server.js'
 import { requireIdentity } from '../context.js'
+import { requireVerifiedEmail } from '../../modules/auth/email-verification.js'
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '../../lib/errors.js'
 import { createJob } from '../../modules/jobs/repository.js'
 import { searchNearbyJobs, getExactLocationForClaimedJob } from '../../modules/geo/job-search.js'
@@ -75,6 +76,13 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
 
   app.post('/jobs', async (request, reply) => {
     const identity = requireIdentity(request)
+    /*
+     * Posting means a stranger is coming to your home, so the account doing it
+     * has to be reachable at a real address. Checked here rather than at
+     * sign-in: locking somebody out of an app they just installed over a mail
+     * in a spam folder loses the person, not the bad actor.
+     */
+    await requireVerifiedEmail(deps.db, identity.userId)
     const body = createJobSchema.parse(request.body)
 
     const property = await deps.db.$queryRaw<Array<{ ownerId: string; lat: number; lng: number; city: string; state: string; yardSize: string }>>(
@@ -382,6 +390,8 @@ export async function registerJobRoutes(app: FastifyInstance, deps: ServerDeps):
       : {},
   }, async (request) => {
     const identity = requireIdentity(request)
+    // And the other direction: claiming means going to a stranger's home.
+    await requireVerifiedEmail(deps.db, identity.userId)
     const params = z.object({ id: z.string().min(1) }).parse(request.params)
     const body = claimJobSchema.partial({ jobId: true }).parse(request.body ?? {})
 

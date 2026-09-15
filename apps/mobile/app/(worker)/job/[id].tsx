@@ -5,6 +5,7 @@ import * as Location from 'expo-location'
 import type { JobDetail } from '@grassassassin/client'
 import { api } from '@/lib/api'
 import { showAlert } from '@/lib/dialog'
+import { isVerificationRequired, verificationRoute } from '@/lib/verification-gate'
 import { useColors, space, radius, textStyles, minTouchTarget } from '@/lib/theme'
 import { displayPrice, displayPayout, formatDeadline, yardSizeLabel } from '@/lib/jobs'
 import { PhotoCapture } from '@/components/photo-capture'
@@ -49,6 +50,18 @@ export default function JobDetailScreen() {
 
       if (result.outcome === 'WON') await load()
       else showAlert('Just missed it', result.message, [{ text: 'Back to map', onPress: () => router.back() }])
+    } catch (error) {
+      // There was no catch here at all: a failed claim rejected into nothing,
+      // leaving the button spinning and the worker with no idea what happened.
+      if (isVerificationRequired(error)) {
+        const route = verificationRoute({ action: 'claim', next: `/(worker)/job/${job.id}` })
+        router.push({ pathname: route.pathname, params: route.params } as never)
+        return
+      }
+      showAlert(
+        'Could not claim',
+        error instanceof Error ? error.message : 'Check your connection and try again.',
+      )
     } finally {
       setWorking(false)
     }

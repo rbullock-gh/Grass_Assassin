@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { prisma, resetDatabase, createCategory, NASHVILLE } from '../../test/factories.js'
+import { prisma, resetDatabase, createCategory, NASHVILLE, markEmailVerified } from '../../test/factories.js'
 import { buildServer } from './server.js'
 import { FakePaymentProvider } from '../modules/payments/fake-provider.js'
 import { RANKS, endOfLocalDay } from '@grassassassin/shared'
@@ -68,12 +68,15 @@ beforeEach(async () => {
     payload: { email: `qc-${stamp}@test.com`, password: 'a-long-enough-password', firstName: 'C', intent: 'CUSTOMER' },
   })
   token = customer.json().tokens.accessToken
+  // Posting needs a verified address; this file is about query-string parsing.
+  await markEmailVerified(customer.json().user.id)
 
   const worker = await app.inject({
     method: 'POST', url: '/v1/auth/register',
     payload: { email: `qw-${stamp}@test.com`, password: 'a-long-enough-password', firstName: 'W', intent: 'WORKER' },
   })
   workerToken = worker.json().tokens.accessToken
+  await markEmailVerified(worker.json().user.id)
   await prisma.workerProfile.update({
     where: { userId: worker.json().user.id },
     data: { status: 'APPROVED', completedJobs: 30, averageRating: 4.9, completionRate: 1, onTimeRate: 1, serviceRadiusMiles: 25 },
